@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
-import { DashboardHome } from "@/components/dashboard";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
+import { DashboardAuthenticatedContent } from "@/app/dashboard-auth-content";
+import { parseMonthParam } from "@/lib/month";
 
 export async function generateMetadata(): Promise<Metadata> {
   const session = await auth();
@@ -13,15 +16,29 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: "Fundly" };
 }
 
-export default async function Home() {
+type PageProps = {
+  searchParams: Promise<{ month?: string }>;
+};
+
+export default async function Home({ searchParams }: PageProps) {
   const session = await auth();
 
   if (session?.user) {
+    const sp = await searchParams;
+    const { year, month } = parseMonthParam(sp.month);
+
     return (
       <AppShell
         user={{ email: session.user.email, name: session.user.name }}
       >
-        <DashboardHome email={session.user.email ?? null} />
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DashboardAuthenticatedContent
+            userId={session.user.id}
+            year={year}
+            month={month}
+            email={session.user.email ?? null}
+          />
+        </Suspense>
       </AppShell>
     );
   }

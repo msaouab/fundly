@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
+import { normalizePgConnectionString } from "@/lib/pg-connection-string";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -7,25 +8,27 @@ const globalForPrisma = globalThis as unknown as {
   __fundlyPrismaRevision?: number;
 };
 
-/** Increment whenever `schema.prisma` changes in a way that affects the client runtime. */
-const PRISMA_CLIENT_CACHE_REVISION = 2;
+/**
+ * Increment when the cached client must be recreated: schema changes, or any
+ * `new PrismaClient({ ... })` option change (e.g. `log`) — otherwise dev HMR keeps
+ * the old instance and old logging behavior forever.
+ */
+const PRISMA_CLIENT_CACHE_REVISION = 3;
 
 function createClient() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) {
     throw new Error(
       "DATABASE_URL is not set. Add your Neon connection string to .env.",
     );
   }
 
+  const connectionString = normalizePgConnectionString(raw);
   const adapter = new PrismaPg({ connectionString });
 
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    log: ["error"],
   });
 }
 
