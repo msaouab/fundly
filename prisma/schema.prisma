@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum IncomeType {
+  SALARY
+  FREELANCE
+  PASSIVE
+  BONUS
+  OTHER
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum ExpenseKind {
+  FIXED
+  VARIABLE
+}
+
+enum ExpenseCategory {
+  HOUSING
+  FOOD_GROCERIES
+  TRANSPORT
+  UTILITIES
+  HEALTH
+  ENTERTAINMENT
+  SHOPPING
+  SUBSCRIPTIONS
+  EDUCATION
+  TRAVEL
+  DONATIONS
+  OTHER
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  incomes      Income[]
+  expenses     Expense[]
+
+  @@map("users")
+}
+
+model Income {
+  id                  String               @id @default(cuid())
+  userId              String               @map("user_id")
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source              String
+  type                IncomeType
+  amount              Decimal              @db.Decimal(12, 2)
+  date                DateTime
+  currency            String               @default("MAD")
+  isRecurring         Boolean              @default(false) @map("is_recurring")
+  recurrenceFrequency RecurrenceFrequency? @map("recurrence_frequency")
+  payee               String?
+  note                String?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([date])
+  @@map("incomes")
+}
+
+model Expense {
+  id                  String               @id @default(cuid())
+  userId              String               @map("user_id")
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description         String               @default("")
+  kind                ExpenseKind          @default(VARIABLE)
+  category            ExpenseCategory      @default(OTHER)
+  amount              Decimal              @db.Decimal(12, 2)
+  date                DateTime
+  currency            String               @default("MAD")
+  isRecurring         Boolean              @default(false) @map("is_recurring")
+  recurrenceFrequency RecurrenceFrequency? @map("recurrence_frequency")
+  payee               String?
+  note                String?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([date])
+  @@index([kind])
+  @@index([category])
+  @@map("expenses")
+}
