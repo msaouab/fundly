@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { ChangePasswordForm } from "@/components/change-password-form";
-import { PasskeyRegisterButton } from "@/components/passkey-register-button";
 import { ProfileNameForm } from "@/components/profile-name-form";
 import { prisma } from "@/lib/prisma";
 import {
@@ -35,7 +34,7 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage account details and sign-in security.
+          Manage account details and password security.
         </p>
       </header>
 
@@ -58,11 +57,9 @@ export default async function SettingsPage() {
       <Card className="border-border dark:border-zinc-800">
         <CardHeader>
           <CardTitle className="text-base">Security</CardTitle>
-          <CardDescription>
-            Enable Touch ID / Face ID login with a passkey.
-          </CardDescription>
+          <CardDescription>Protect your account with a strong password.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-2">
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">Password</h3>
             <p className="text-xs text-muted-foreground">
@@ -70,14 +67,6 @@ export default async function SettingsPage() {
             </p>
             <ChangePasswordForm />
           </div>
-          <div className="h-px bg-border dark:bg-zinc-800" />
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">Passkey login</h3>
-            <p className="text-xs text-muted-foreground">
-              Use Touch ID / Face ID for faster sign-in on supported devices.
-            </p>
-          </div>
-          <PasskeyRegisterButton />
         </CardContent>
       </Card>
     </div>

@@ -108,6 +108,7 @@ export function DuplicateIncomeBanner({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Select
+            name="duplicateIncomeTargetMonth"
             value={targetKey ?? targetOptions[0]?.key ?? ""}
             onValueChange={setTargetKey}
           >

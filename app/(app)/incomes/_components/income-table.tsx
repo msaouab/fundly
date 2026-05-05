@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useReducer,
   useState,
@@ -22,7 +23,7 @@ import {
   Repeat,
   Trash2,
 } from "lucide-react";
-import { useForm, Controller, type Resolver } from "react-hook-form";
+import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { deleteIncome, editIncome } from "../actions";
@@ -117,6 +118,7 @@ type IncomeTableProps = {
 };
 
 export function IncomeTable({ incomes, currency }: IncomeTableProps) {
+  const searchInputId = useId();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -222,6 +224,8 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
     <div className="space-y-4 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input
+          id={searchInputId}
+          name="incomeSearch"
           placeholder="Search source or payee…"
           value={search}
           onChange={(e) => {
@@ -592,8 +596,8 @@ function EditIncomeSheetForm({
     },
   });
 
-  const type = form.watch("type");
-  const isRecurring = form.watch("isRecurring");
+  const type = useWatch({ control: form.control, name: "type" });
+  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
   const showRecurring = type === "SALARY" || type === "PASSIVE";
 
   useEffect(() => {
@@ -647,17 +651,18 @@ function EditIncomeSheetForm({
         onSubmit={form.handleSubmit(onSubmit)}
         className="mt-6 grid gap-4"
       >
-        <input type="hidden" {...form.register("id")} />
+        <input id="edit-income-id" type="hidden" {...form.register("id")} />
         <div className="space-y-2">
-          <Label>Amount ({currency})</Label>
+          <Label htmlFor="edit-income-amount">Amount ({currency})</Label>
           <Input
+            id="edit-income-amount"
             type="number"
             step="0.01"
             {...form.register("amount", { valueAsNumber: true })}
           />
         </div>
         <div className="space-y-2">
-          <Label>Date</Label>
+          <Label htmlFor="edit-income-date-trigger">Date</Label>
           <Controller
             control={form.control}
             name="date"
@@ -665,6 +670,7 @@ function EditIncomeSheetForm({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    id="edit-income-date-trigger"
                     type="button"
                     variant="outline"
                     className={cn(
@@ -689,17 +695,21 @@ function EditIncomeSheetForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Source</Label>
-          <Input {...form.register("source")} />
+          <Label htmlFor="edit-income-source">Source</Label>
+          <Input id="edit-income-source" {...form.register("source")} />
         </div>
         <div className="space-y-2">
-          <Label>Type</Label>
+          <Label htmlFor="edit-income-type-trigger">Type</Label>
           <Controller
             control={form.control}
             name="type"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
+              <Select
+                name="editIncomeType"
+                value={field.value}
+                onValueChange={field.onChange}
+              >
+                <SelectTrigger id="edit-income-type-trigger">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -715,12 +725,13 @@ function EditIncomeSheetForm({
         </div>
         {showRecurring ? (
           <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-            <Label>Recurring</Label>
+            <Label htmlFor="edit-income-recurring">Recurring</Label>
             <Controller
               control={form.control}
               name="isRecurring"
               render={({ field }) => (
                 <Switch
+                  id="edit-income-recurring"
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
@@ -734,10 +745,11 @@ function EditIncomeSheetForm({
             name="recurrenceFrequency"
             render={({ field }) => (
               <Select
+                name="editIncomeRecurrence"
                 value={field.value ?? ""}
                 onValueChange={(v) => field.onChange(v || null)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="edit-income-recurrence-trigger">
                   <SelectValue placeholder="Frequency" />
                 </SelectTrigger>
                 <SelectContent>
@@ -751,12 +763,12 @@ function EditIncomeSheetForm({
           />
         ) : null}
         <div className="space-y-2">
-          <Label>Payee</Label>
-          <Input {...form.register("payee")} />
+          <Label htmlFor="edit-income-payee">Payee</Label>
+          <Input id="edit-income-payee" {...form.register("payee")} />
         </div>
         <div className="space-y-2">
-          <Label>Note</Label>
-          <Textarea rows={3} maxLength={200} {...form.register("note")} />
+          <Label htmlFor="edit-income-note">Note</Label>
+          <Textarea id="edit-income-note" rows={3} maxLength={200} {...form.register("note")} />
         </div>
         <Button type="submit" disabled={pending}>
           {pending ? (

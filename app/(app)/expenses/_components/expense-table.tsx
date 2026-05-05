@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useReducer,
   useState,
@@ -23,7 +24,7 @@ import {
   Repeat,
   Trash2,
 } from "lucide-react";
-import { useForm, Controller, type Resolver } from "react-hook-form";
+import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { deleteExpense, deleteExpenses, duplicateExpenses, editExpense } from "../actions";
@@ -119,6 +120,7 @@ export function ExpenseTable({
   monthKey,
   onFocusAddForm,
 }: ExpenseTableProps) {
+  const searchInputId = useId();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -342,6 +344,8 @@ export function ExpenseTable({
     <div className="space-y-4 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3">
         <Input
+          id={searchInputId}
+          name="expenseSearch"
           placeholder="Search description or payee…"
           value={search}
           onChange={(e) => {
@@ -808,12 +812,13 @@ export function ExpenseTable({
             <DialogTitle>Duplicate selected expenses</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Target month</Label>
+            <Label htmlFor="bulk-dup-target-month">Target month</Label>
             <Select
+              name="bulkDuplicateExpenseTargetMonth"
               value={bulkTargetKey ?? bulkTargetOptions[0]?.key ?? ""}
               onValueChange={setBulkTargetKey}
             >
-              <SelectTrigger className="dark:border-zinc-700">
+              <SelectTrigger id="bulk-dup-target-month" className="dark:border-zinc-700">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -926,8 +931,8 @@ function EditExpenseSheetForm({
     },
   });
 
-  const kind = form.watch("kind");
-  const isRecurring = form.watch("isRecurring");
+  const kind = useWatch({ control: form.control, name: "kind" });
+  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
 
   useEffect(() => {
     if (kind === "VARIABLE") {
@@ -980,9 +985,9 @@ function EditExpenseSheetForm({
         <SheetTitle>Edit expense</SheetTitle>
       </SheetHeader>
       <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 grid gap-4">
-        <input type="hidden" {...form.register("id")} />
+        <input id="edit-expense-id" type="hidden" {...form.register("id")} />
         <div className="space-y-2">
-          <Label>Kind</Label>
+          <p className="text-sm font-medium">Kind</p>
           <Controller
             control={form.control}
             name="kind"
@@ -996,11 +1001,16 @@ function EditExpenseSheetForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Amount ({currency})</Label>
-          <Input type="number" step="0.01" {...form.register("amount", { valueAsNumber: true })} />
+          <Label htmlFor="edit-expense-amount">Amount ({currency})</Label>
+          <Input
+            id="edit-expense-amount"
+            type="number"
+            step="0.01"
+            {...form.register("amount", { valueAsNumber: true })}
+          />
         </div>
         <div className="space-y-2">
-          <Label>Date</Label>
+          <Label htmlFor="edit-expense-date-trigger">Date</Label>
           <Controller
             control={form.control}
             name="date"
@@ -1008,6 +1018,7 @@ function EditExpenseSheetForm({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    id="edit-expense-date-trigger"
                     type="button"
                     variant="outline"
                     className={cn(
@@ -1032,17 +1043,21 @@ function EditExpenseSheetForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Description (optional)</Label>
-          <Input {...form.register("description")} />
+          <Label htmlFor="edit-expense-description">Description (optional)</Label>
+          <Input id="edit-expense-description" {...form.register("description")} />
         </div>
         <div className="space-y-2">
-          <Label>Category</Label>
+          <Label htmlFor="edit-expense-category-trigger">Category</Label>
           <Controller
             control={form.control}
             name="category"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="dark:border-zinc-700">
+              <Select
+                name="editExpenseCategory"
+                value={field.value}
+                onValueChange={field.onChange}
+              >
+                <SelectTrigger id="edit-expense-category-trigger" className="dark:border-zinc-700">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1064,12 +1079,16 @@ function EditExpenseSheetForm({
         </div>
         {kind === "FIXED" ? (
           <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-zinc-700">
-            <Label>Recurring</Label>
+            <Label htmlFor="edit-expense-recurring">Recurring</Label>
             <Controller
               control={form.control}
               name="isRecurring"
               render={({ field }) => (
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                <Switch
+                  id="edit-expense-recurring"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
               )}
             />
           </div>
@@ -1080,10 +1099,11 @@ function EditExpenseSheetForm({
             name="recurrenceFrequency"
             render={({ field }) => (
               <Select
+                name="editExpenseRecurrence"
                 value={field.value ?? ""}
                 onValueChange={(v) => field.onChange(v || null)}
               >
-                <SelectTrigger className="dark:border-zinc-700">
+                <SelectTrigger id="edit-expense-recurrence-trigger" className="dark:border-zinc-700">
                   <SelectValue placeholder="Frequency" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1097,12 +1117,12 @@ function EditExpenseSheetForm({
           />
         ) : null}
         <div className="space-y-2">
-          <Label>Payee</Label>
-          <Input {...form.register("payee")} />
+          <Label htmlFor="edit-expense-payee">Payee</Label>
+          <Input id="edit-expense-payee" {...form.register("payee")} />
         </div>
         <div className="space-y-2">
-          <Label>Note</Label>
-          <Textarea rows={3} maxLength={200} {...form.register("note")} />
+          <Label htmlFor="edit-expense-note">Note</Label>
+          <Textarea id="edit-expense-note" rows={3} maxLength={200} {...form.register("note")} />
         </div>
         <Button type="submit" disabled={pending}>
           {pending ? (

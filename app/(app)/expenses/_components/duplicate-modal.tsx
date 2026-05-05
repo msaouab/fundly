@@ -144,6 +144,7 @@ export function DuplicateExpenseBanner({
         <p className="text-sm font-medium text-foreground">Duplicate expenses to →</p>
         <div className="flex flex-wrap items-center gap-2">
           <Select
+            name="duplicateExpenseTargetMonth"
             value={targetKey ?? targetOptions[0]?.key ?? ""}
             onValueChange={setTargetKey}
           >

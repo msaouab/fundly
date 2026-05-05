@@ -137,6 +137,7 @@ export function IncomesView({
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Month</span>
           <Select
+            name="incomeMonth"
             value={monthKey}
             onValueChange={(key) => {
               router.push(`/incomes?month=${key}`, { scroll: false });

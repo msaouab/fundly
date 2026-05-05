@@ -208,7 +208,7 @@ export function ExpenseForm({
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
           <div className="space-y-2">
-            <Label className="text-muted-foreground">Kind</Label>
+            <p className="text-sm font-medium text-muted-foreground">Kind</p>
             <Controller
               control={form.control}
               name="kind"
@@ -251,7 +251,7 @@ export function ExpenseForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Date</Label>
+            <Label htmlFor="expense-date-trigger">Date</Label>
             <Controller
               control={form.control}
               name="date"
@@ -259,6 +259,7 @@ export function ExpenseForm({
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="expense-date-trigger"
                       type="button"
                       variant="outline"
                       className={cn(
@@ -294,13 +295,17 @@ export function ExpenseForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Category</Label>
+            <Label htmlFor="expense-category-trigger">Category</Label>
             <Controller
               control={form.control}
               name="category"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="dark:border-zinc-700">
+                <Select
+                  name="expenseCategory"
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger id="expense-category-trigger" className="dark:border-zinc-700">
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -342,16 +347,17 @@ export function ExpenseForm({
 
           {kind === "FIXED" && isRecurring ? (
             <div className="space-y-2">
-              <Label>Recurrence</Label>
+              <Label htmlFor="expense-recurrence-trigger">Recurrence</Label>
               <Controller
                 control={form.control}
                 name="recurrenceFrequency"
                 render={({ field }) => (
                   <Select
+                    name="expenseRecurrence"
                     value={field.value ?? ""}
                     onValueChange={(v) => field.onChange(v || null)}
                   >
-                    <SelectTrigger className="dark:border-zinc-700">
+                    <SelectTrigger id="expense-recurrence-trigger" className="dark:border-zinc-700">
                       <SelectValue placeholder="Frequency" />
                     </SelectTrigger>
                     <SelectContent>

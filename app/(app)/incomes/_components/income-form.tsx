@@ -184,13 +184,13 @@ export function IncomeForm({
           className="grid gap-4 sm:grid-cols-2"
         >
           <div className="space-y-2 sm:col-span-1">
-            <Label htmlFor="amount">Amount ({currency})</Label>
+            <Label htmlFor="income-add-amount">Amount ({currency})</Label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 {currency}
               </span>
               <Input
-                id="amount"
+                id="income-add-amount"
                 type="number"
                 step="0.01"
                 className="pl-14"
@@ -209,7 +209,7 @@ export function IncomeForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Date</Label>
+            <Label htmlFor="income-date-trigger">Date</Label>
             <Controller
               control={form.control}
               name="date"
@@ -217,6 +217,7 @@ export function IncomeForm({
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="income-date-trigger"
                       type="button"
                       variant="outline"
                       className={cn(
@@ -244,8 +245,8 @@ export function IncomeForm({
           </div>
 
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="source">Source name</Label>
-            <Input id="source" {...form.register("source")} />
+            <Label htmlFor="income-add-source">Source name</Label>
+            <Input id="income-add-source" {...form.register("source")} />
             {form.formState.errors.source ? (
               <p className="text-xs text-destructive">
                 {form.formState.errors.source.message}
@@ -254,13 +255,17 @@ export function IncomeForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Type</Label>
+            <Label htmlFor="income-type-trigger">Type</Label>
             <Controller
               control={form.control}
               name="type"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                <Select
+                  name="incomeType"
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger id="income-type-trigger">
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -277,7 +282,7 @@ export function IncomeForm({
 
           {showRecurring ? (
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-zinc-700">
-              <Label htmlFor="recurring" className="cursor-pointer">
+              <Label htmlFor="income-add-recurring" className="cursor-pointer">
                 Recurring
               </Label>
               <Controller
@@ -285,7 +290,7 @@ export function IncomeForm({
                 name="isRecurring"
                 render={({ field }) => (
                   <Switch
-                    id="recurring"
+                    id="income-add-recurring"
                     checked={field.value}
                     onCheckedChange={field.onChange}
                   />
@@ -296,16 +301,17 @@ export function IncomeForm({
 
           {showRecurring && isRecurring ? (
             <div className="space-y-2">
-              <Label>Recurrence</Label>
+              <Label htmlFor="income-recurrence-trigger">Recurrence</Label>
               <Controller
                 control={form.control}
                 name="recurrenceFrequency"
                 render={({ field }) => (
                   <Select
+                    name="incomeRecurrence"
                     value={field.value ?? ""}
                     onValueChange={(v) => field.onChange(v || null)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="income-recurrence-trigger">
                       <SelectValue placeholder="Frequency" />
                     </SelectTrigger>
                     <SelectContent>
@@ -326,16 +332,16 @@ export function IncomeForm({
           ) : null}
 
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="payee">Payee (optional)</Label>
-            <Input id="payee" {...form.register("payee")} />
+            <Label htmlFor="income-add-payee">Payee (optional)</Label>
+            <Input id="income-add-payee" {...form.register("payee")} />
           </div>
 
           <div className="space-y-2 sm:col-span-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="note">Note (optional)</Label>
+              <Label htmlFor="income-add-note">Note (optional)</Label>
               <span className="text-xs text-muted-foreground">{noteLen}/200</span>
             </div>
-            <Textarea id="note" maxLength={200} rows={3} {...form.register("note")} />
+            <Textarea id="income-add-note" maxLength={200} rows={3} {...form.register("note")} />
           </div>
 
           <div className="sm:col-span-2">
