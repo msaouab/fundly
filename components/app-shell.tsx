@@ -192,6 +192,17 @@ export function AppShell({ children, user }: AppShellProps) {
           sidebarCollapsed ? "md:pl-16" : "md:pl-56",
         )}
       >
+        <div className="flex items-center justify-end px-4 pt-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/" })}
+            aria-label="Sign out"
+            title="Sign out"
+            className="inline-flex size-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <LogOut className="size-4 shrink-0" aria-hidden />
+          </button>
+        </div>
         <main className="flex-1 px-4 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0))] md:px-8 md:py-8 md:pb-8">
           {children}
         </main>
@@ -217,14 +228,6 @@ export function AppShell({ children, user }: AppShellProps) {
             </Link>
           );
         })}
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/" })}
-          className={`${mobileItemClass(false)} text-zinc-600 dark:text-zinc-400`}
-        >
-          <LogOut className="size-6 shrink-0" aria-hidden />
-          <span className="max-w-18 truncate">Sign out</span>
-        </button>
       </nav>
       </div>
     </TooltipProvider>
