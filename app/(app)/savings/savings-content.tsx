@@ -22,7 +22,7 @@ export async function SavingsPageContent({
       monthKey={formatMonthKey(year, month)}
       currency={data.currency}
       monthly={data.monthly}
-      previousMonthSaved={data.previousMonthSaved}
+      previousMonthSavedFromIncome={data.previousMonthSavedFromIncome}
       global={data.global}
       trend={data.trend}
     />

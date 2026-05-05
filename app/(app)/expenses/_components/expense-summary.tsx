@@ -9,7 +9,7 @@ type ExpenseSummaryProps = {
 };
 
 export function ExpenseSummary({ summary, currency }: ExpenseSummaryProps) {
-  const { total, fixed, variable, totalIncome } = summary;
+  const { total, fixed, variable, savingsContribution, totalIncome } = summary;
   const pctOfIncome = (part: number) =>
     totalIncome > 0 ? formatPercent((part / totalIncome) * 100, 0) : "0%";
 
@@ -32,10 +32,16 @@ export function ExpenseSummary({ summary, currency }: ExpenseSummaryProps) {
       hint: pctOfIncome(variable),
       accent: "text-primary/75",
     },
+    {
+      title: "Savings contribution",
+      value: savingsContribution,
+      hint: pctOfIncome(savingsContribution),
+      accent: "text-blue-600 dark:text-blue-400",
+    },
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((c) => (
         <Card
           key={c.title}

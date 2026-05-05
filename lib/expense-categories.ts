@@ -13,6 +13,7 @@ export const EXPENSE_CATEGORY_ORDER: ExpenseCategory[] = [
   "EDUCATION",
   "TRAVEL",
   "DONATIONS",
+  "SAVINGS_CONTRIBUTION",
   "OTHER",
 ];
 
@@ -79,6 +80,11 @@ export const CATEGORY_CONFIG: Record<ExpenseCategory, CategoryConfigEntry> = {
     label: "Donations & gifts",
     icon: "🎁",
     segmentClass: "bg-primary/25",
+  },
+  SAVINGS_CONTRIBUTION: {
+    label: "Savings contribution",
+    icon: "🏦",
+    segmentClass: "bg-blue-500/80",
   },
   OTHER: {
     label: "Other",

@@ -1,15 +1,15 @@
 import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { addMonths, formatMonthKey, monthRangeLocal } from "@/lib/month";
-import type { SavingsPageData, SavingsPoint } from "./types";
+import type { MonthlySavings, SavingsPageData, SavingsPoint } from "./types";
 
 async function sumIncomeAndExpense(
   userId: string,
   start?: Date,
   end?: Date,
-): Promise<{ income: number; expense: number }> {
+): Promise<{ income: number; expense: number; savingsContribution: number }> {
   const dateFilter = start && end ? { date: { gte: start, lte: end } } : {};
-  const [incomeAgg, expenseAgg] = await Promise.all([
+  const [incomeAgg, expenseAgg, savingsContributionAgg] = await Promise.all([
     prisma.income.aggregate({
       where: { userId, ...dateFilter },
       _sum: { amount: true },
@@ -18,11 +18,40 @@ async function sumIncomeAndExpense(
       where: { userId, ...dateFilter },
       _sum: { amount: true },
     }),
+    prisma.expense.aggregate({
+      where: {
+        userId,
+        ...dateFilter,
+        category: "SAVINGS_CONTRIBUTION",
+      },
+      _sum: { amount: true },
+    }),
   ]);
 
   return {
     income: Number(incomeAgg._sum.amount ?? 0),
     expense: Number(expenseAgg._sum.amount ?? 0),
+    savingsContribution: Number(savingsContributionAgg._sum.amount ?? 0),
+  };
+}
+
+function toSavingsPoint(
+  income: number,
+  expense: number,
+  savingsContribution: number,
+  monthKey: string,
+  label: string,
+): SavingsPoint {
+  const spendExcludingContribution = expense - savingsContribution;
+  const savedFromIncome = income - spendExcludingContribution;
+  return {
+    monthKey,
+    label,
+    income,
+    expense,
+    savingsContribution,
+    spendExcludingContribution,
+    savedFromIncome,
   };
 }
 
@@ -37,16 +66,33 @@ async function buildTrend(
     deltas.map(async (delta) => {
       const { year, month } = addMonths(endYear, endMonth, delta);
       const { start, end } = monthRangeLocal(year, month);
-      const { income, expense } = await sumIncomeAndExpense(userId, start, end);
-      return {
-        monthKey: formatMonthKey(year, month),
-        label: format(new Date(year, month - 1, 1), "MMM"),
+      const { income, expense, savingsContribution } = await sumIncomeAndExpense(userId, start, end);
+      return toSavingsPoint(
         income,
         expense,
-        saved: income - expense,
-      };
+        savingsContribution,
+        formatMonthKey(year, month),
+        format(new Date(year, month - 1, 1), "MMM"),
+      );
     }),
   );
+}
+
+function monthlyRollup(
+  income: number,
+  expense: number,
+  savingsContribution: number,
+): MonthlySavings {
+  const spendExcludingContribution = expense - savingsContribution;
+  const savedFromIncome = income - spendExcludingContribution;
+  return {
+    income,
+    expense,
+    spendExcludingContribution,
+    savingsContribution,
+    savedFromIncome,
+    savingsRateFromIncome: income > 0 ? (savedFromIncome / income) * 100 : 0,
+  };
 }
 
 export async function fetchSavingsPageData(
@@ -71,26 +117,32 @@ export async function fetchSavingsPageData(
       }),
     ]);
 
-  const monthlySaved = monthlyTotals.income - monthlyTotals.expense;
-  const previousSaved = previousTotals.income - previousTotals.expense;
-  const totalSaved = globalTotals.income - globalTotals.expense;
+  const monthly = monthlyRollup(
+    monthlyTotals.income,
+    monthlyTotals.expense,
+    monthlyTotals.savingsContribution,
+  );
+  const previousMonth = monthlyRollup(
+    previousTotals.income,
+    previousTotals.expense,
+    previousTotals.savingsContribution,
+  );
+  const globalSpendExcl =
+    globalTotals.expense - globalTotals.savingsContribution;
+  const totalSavedFromIncome = globalTotals.income - globalSpendExcl;
 
   return {
     currency: currencySource?.currency ?? "MAD",
-    monthly: {
-      income: monthlyTotals.income,
-      expense: monthlyTotals.expense,
-      saved: monthlySaved,
-      savingsRate:
-        monthlyTotals.income > 0 ? (monthlySaved / monthlyTotals.income) * 100 : 0,
-    },
-    previousMonthSaved: previousSaved,
+    monthly,
+    previousMonthSavedFromIncome: previousMonth.savedFromIncome,
     global: {
       totalIncome: globalTotals.income,
       totalExpense: globalTotals.expense,
-      totalSaved,
-      lifetimeSavingsRate:
-        globalTotals.income > 0 ? (totalSaved / globalTotals.income) * 100 : 0,
+      totalSpendExcludingContribution: globalSpendExcl,
+      totalSavingsContribution: globalTotals.savingsContribution,
+      totalSavedFromIncome,
+      lifetimeSavingsRateFromIncome:
+        globalTotals.income > 0 ? (totalSavedFromIncome / globalTotals.income) * 100 : 0,
     },
     trend,
   };

@@ -48,14 +48,20 @@ export async function fetchExpensesPageData(
   let total = 0;
   let fixed = 0;
   let variable = 0;
+  let savingsContribution = 0;
   for (const r of expenseRows) {
     const n = Number(r.amount);
     total += n;
     if (r.kind === "FIXED") fixed += n;
     else variable += n;
+    if (r.category === "SAVINGS_CONTRIBUTION") {
+      savingsContribution += n;
+    }
   }
   const totalIncome = Number(incomeAgg._sum.amount ?? 0);
-  const net = totalIncome - total;
+  // Savings contributions are recorded as expenses but represent money moved to savings,
+  // not discretionary spend — align net / rate with the Savings page.
+  const net = totalIncome - total + savingsContribution;
   const savingsRate = totalIncome > 0 ? (net / totalIncome) * 100 : 0;
 
   const expenses: ExpenseWithMeta[] = expenseRows.map((r) => {
@@ -105,6 +111,7 @@ export async function fetchExpensesPageData(
     total,
     fixed,
     variable,
+    savingsContribution,
     totalIncome,
     net,
     savingsRate,

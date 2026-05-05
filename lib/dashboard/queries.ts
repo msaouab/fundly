@@ -16,7 +16,7 @@ async function fetchMonthlyFlowSeries(
     deltas.map(async (delta) => {
       const { year: y, month: m } = addMonths(endYear, endMonth, delta);
       const { start, end } = monthRangeLocal(y, m);
-      const [incomeAgg, expenseAgg] = await Promise.all([
+      const [incomeAgg, expenseAgg, savingsAgg] = await Promise.all([
         prisma.income.aggregate({
           where: { userId, date: { gte: start, lte: end } },
           _sum: { amount: true },
@@ -25,15 +25,24 @@ async function fetchMonthlyFlowSeries(
           where: { userId, date: { gte: start, lte: end } },
           _sum: { amount: true },
         }),
+        prisma.expense.aggregate({
+          where: {
+            userId,
+            date: { gte: start, lte: end },
+            category: "SAVINGS_CONTRIBUTION",
+          },
+          _sum: { amount: true },
+        }),
       ]);
       const income = Number(incomeAgg._sum.amount ?? 0);
       const expense = Number(expenseAgg._sum.amount ?? 0);
+      const savingsContribution = Number(savingsAgg._sum.amount ?? 0);
       return {
         monthKey: formatMonthKey(y, m),
         label: format(new Date(y, m - 1, 1), "MMM"),
         income,
         expense,
-        net: income - expense,
+        net: income - expense + savingsContribution,
       };
     }),
   );
@@ -42,7 +51,7 @@ async function fetchMonthlyFlowSeries(
 async function fetchPreviousMonthNet(userId: string, year: number, month: number): Promise<number> {
   const { year: py, month: pm } = addMonths(year, month, -1);
   const { start, end } = monthRangeLocal(py, pm);
-  const [incomeAgg, expenseAgg] = await Promise.all([
+  const [incomeAgg, expenseAgg, savingsAgg] = await Promise.all([
     prisma.income.aggregate({
       where: { userId, date: { gte: start, lte: end } },
       _sum: { amount: true },
@@ -51,10 +60,19 @@ async function fetchPreviousMonthNet(userId: string, year: number, month: number
       where: { userId, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
+    prisma.expense.aggregate({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+        category: "SAVINGS_CONTRIBUTION",
+      },
+      _sum: { amount: true },
+    }),
   ]);
   const income = Number(incomeAgg._sum.amount ?? 0);
   const expense = Number(expenseAgg._sum.amount ?? 0);
-  return income - expense;
+  const savingsContribution = Number(savingsAgg._sum.amount ?? 0);
+  return income - expense + savingsContribution;
 }
 
 function pickLargestExpense(
@@ -93,11 +111,13 @@ export async function fetchDashboardData(userId: string, year: number, month: nu
     flowSeries,
     previousMonthNet,
     largestExpense: pickLargestExpense(
-      expensePage.expenses.map((e) => ({
-        description: e.description,
-        payee: e.payee,
-        amount: e.amount,
-      })),
+      expensePage.expenses
+        .filter((e) => e.category !== "SAVINGS_CONTRIBUTION")
+        .map((e) => ({
+          description: e.description,
+          payee: e.payee,
+          amount: e.amount,
+        })),
     ),
   };
 }

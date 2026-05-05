@@ -34,6 +34,7 @@ export type ExpenseMonthSummary = {
   total: number;
   fixed: number;
   variable: number;
+  savingsContribution: number;
   totalIncome: number;
   net: number;
   savingsRate: number;

@@ -185,10 +185,13 @@ export function DashboardView({
               <CardTitle id="dash-net-heading" className="text-base font-semibold">
                 Net cash flow
               </CardTitle>
-              <span className="text-xs text-muted-foreground">Income minus expenses</span>
+              <span className="text-xs text-muted-foreground">
+                Income minus expenses; savings transfers add back to net
+              </span>
             </div>
             <CardDescription className="sr-only">
-              Net amount for this month after subtracting expenses from income.
+              Net cash flow for this month: income minus all expenses, plus amounts recorded as
+              savings contributions (transfers, not spend).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -200,6 +203,14 @@ export function DashboardView({
             >
               {formatMoney(net, currency)}
             </p>
+            {expenseSummary.savingsContribution > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Savings contributions this month:{" "}
+                <span className="font-medium tabular-nums text-foreground">
+                  {formatMoney(expenseSummary.savingsContribution, currency)}
+                </span>
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-muted-foreground">vs previous month:</span>
               <span
@@ -299,7 +310,7 @@ export function DashboardView({
               Income, expenses, and savings · last 6 months
             </CardTitle>
             <CardDescription>
-              Grouped bars for income, expenses, and savings by month.
+              Savings bar is net flow (income − expenses + savings contributions) per month.
             </CardDescription>
           </CardHeader>
           <CardContent className="w-full min-w-0 pb-4 pt-0">
@@ -323,6 +334,14 @@ export function DashboardView({
                       border: "1px solid var(--border)",
                       borderRadius: 8,
                       color: "var(--popover-foreground)",
+                    }}
+                    itemSorter={(item) => {
+                      const order: Record<string, number> = {
+                        income: 0,
+                        expense: 1,
+                        net: 2,
+                      };
+                      return order[String(item.dataKey ?? "")] ?? 99;
                     }}
                     formatter={(value, name) => [
                       formatMoney(Number(value ?? 0), currency),
