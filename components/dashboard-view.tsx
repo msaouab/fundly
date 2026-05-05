@@ -57,6 +57,7 @@ type DashboardViewProps = {
   incomeSources: IncomeSource[];
   flowSeries: MonthlyFlowPoint[];
   previousMonthNet: number;
+  previousMonthRemainderAfterFixed: number;
   largestExpense: DashboardHighlight;
 };
 
@@ -102,6 +103,7 @@ export function DashboardView({
   incomeSources,
   flowSeries,
   previousMonthNet,
+  previousMonthRemainderAfterFixed,
   largestExpense,
 }: DashboardViewProps) {
   const router = useRouter();
@@ -119,9 +121,11 @@ export function DashboardView({
     return out;
   }, [year, month]);
 
-  const net = expenseSummary.net;
-  const deltaNet = net - previousMonthNet;
-  const netPositive = net >= 0;
+  const grossRemainder = expenseSummary.net;
+  const remainderAfterFixed = expenseSummary.remainingIncomeAfterFixedSavings;
+  const deltaRemainderAfterFixed = remainderAfterFixed - previousMonthRemainderAfterFixed;
+  const deltaGrossRemainder = grossRemainder - previousMonthNet;
+  const remainderPositive = remainderAfterFixed >= 0;
   const recurringIncomeShare =
     incomeSummary.total > 0 ? (incomeSummary.recurring / incomeSummary.total) * 100 : 0;
 
@@ -183,66 +187,103 @@ export function DashboardView({
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-baseline gap-3">
               <CardTitle id="dash-net-heading" className="text-base font-semibold">
-                Net cash flow
+                Remaining income (after fixed savings)
               </CardTitle>
               <span className="text-xs text-muted-foreground">
-                Income minus expenses; savings transfers add back to net
+                Gross remainder minus planned recurring savings transfers
               </span>
             </div>
             <CardDescription className="sr-only">
-              Net cash flow for this month: income minus all expenses, plus amounts recorded as
-              savings contributions (transfers, not spend).
+              Discretionary remainder for this month after reserving planned recurring savings-category
+              transfers; gross remainder is income minus spending excluding all savings transfers.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <p
               className={cn(
                 "text-4xl font-semibold tabular-nums tracking-tight",
-                netPositive ? "text-primary" : "text-destructive",
+                remainderPositive ? "text-primary" : "text-destructive",
               )}
             >
-              {formatMoney(net, currency)}
+              {formatMoney(remainderAfterFixed, currency)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Gross remainder (before reserving planned saves):{" "}
+              <span className="font-medium tabular-nums text-foreground">{formatMoney(grossRemainder, currency)}</span>
+              {' — '}same headline as Savings &quot;remainder room&quot; KPI.
             </p>
             {expenseSummary.savingsContribution > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Savings contributions this month:{" "}
-                <span className="font-medium tabular-nums text-foreground">
-                  {formatMoney(expenseSummary.savingsContribution, currency)}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  Planned transfers:{" "}
+                  <span className="font-medium tabular-nums text-foreground">
+                    {formatMoney(expenseSummary.recurringSavingsTransfer, currency)}
+                  </span>
                 </span>
-              </p>
+                <span>
+                  One-off transfers:{" "}
+                  <span className="font-medium tabular-nums text-foreground">
+                    {formatMoney(expenseSummary.oneOffSavingsTransfer, currency)}
+                  </span>
+                </span>
+              </div>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Cash after <em className="not-italic">all</em> tracked rows (incl. transfers):{" "}
+              <span
+                className={cn(
+                  "font-medium tabular-nums",
+                  expenseSummary.cashAfterAllExpenses >= 0 ? "text-foreground" : "text-destructive",
+                )}
+              >
+                {formatMoney(expenseSummary.cashAfterAllExpenses, currency)}
+              </span>
+            </p>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">vs previous month:</span>
+              <span className="text-muted-foreground">vs previous month (after fixed saves):</span>
               <span
                 className={cn(
                   "inline-flex items-center gap-1 font-medium tabular-nums",
-                  deltaNet > 0
+                  deltaRemainderAfterFixed > 0
                     ? "text-primary"
-                    : deltaNet < 0
+                    : deltaRemainderAfterFixed < 0
                       ? "text-destructive"
                       : "text-muted-foreground",
                 )}
               >
-                {deltaNet > 0 ? (
+                {deltaRemainderAfterFixed > 0 ? (
                   <TrendingUp className="size-4" aria-hidden />
-                ) : deltaNet < 0 ? (
+                ) : deltaRemainderAfterFixed < 0 ? (
                   <TrendingDown className="size-4" aria-hidden />
                 ) : null}
-                {deltaNet >= 0 ? "+" : ""}
-                {formatMoney(deltaNet, currency)}
+                {deltaRemainderAfterFixed >= 0 ? "+" : ""}
+                {formatMoney(deltaRemainderAfterFixed, currency)}
               </span>
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Gross remainder vs prior month:{" "}
+              <span className={cn("font-medium tabular-nums", deltaGrossRemainder >= 0 ? "text-foreground" : "text-destructive")}>
+                {deltaGrossRemainder >= 0 ? "+" : ""}
+                {formatMoney(deltaGrossRemainder, currency)}
+              </span>
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-border md:col-span-5 lg:col-span-4 dark:border-zinc-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Savings rate</CardTitle>
-            <CardDescription>Net divided by monthly income</CardDescription>
+            <CardTitle className="text-base font-semibold">Discretionary rate</CardTitle>
+            <CardDescription>
+              Remaining income after fixed planned saves, as a share of income. Gross remainder rate is
+              income − spend excl. transfers.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold tabular-nums text-primary">
-              {formatPercent(expenseSummary.savingsRate, 1)}
+              {formatPercent(expenseSummary.discretionaryRateAfterFixed, 1)}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Gross room / income: {formatPercent(expenseSummary.savingsRate, 1)}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Recurring income: {formatPercent(recurringIncomeShare, 0)} of all income this month
@@ -307,10 +348,11 @@ export function DashboardView({
         <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
           <CardHeader>
             <CardTitle id="dash-flow-chart-title" className="text-base font-semibold">
-              Income, expenses, and savings · last 6 months
+              Income, spend, discretionary remainder, and savings moves · last 6 months
             </CardTitle>
             <CardDescription>
-              Savings bar is net flow (income − expenses + savings contributions) per month.
+              Green = gross surplus minus planned recurring transfers. Planned vs one-off = expenses in
+              SAVINGS_CONTRIBUTION marked recurring or not (weekly/monthly…).
             </CardDescription>
           </CardHeader>
           <CardContent className="w-full min-w-0 pb-4 pt-0">
@@ -339,7 +381,9 @@ export function DashboardView({
                       const order: Record<string, number> = {
                         income: 0,
                         expense: 1,
-                        net: 2,
+                        remainderAfterFixedSavings: 2,
+                        recurringSavingsTransfers: 3,
+                        oneOffSavingsTransfers: 4,
                       };
                       return order[String(item.dataKey ?? "")] ?? 99;
                     }}
@@ -354,14 +398,28 @@ export function DashboardView({
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="expense" name="Expenses" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Bar dataKey="expense" name="Expenses" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={32} />
                   <Bar
-                    dataKey="net"
-                    name="Savings"
-                    fill="#2563eb"
+                    dataKey="remainderAfterFixedSavings"
+                    name="Remainder (after planned saves)"
+                    fill="#059669"
                     radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
+                    maxBarSize={32}
+                  />
+                  <Bar
+                    dataKey="recurringSavingsTransfers"
+                    name="Planned transfers"
+                    fill="#1d4ed8"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={32}
+                  />
+                  <Bar
+                    dataKey="oneOffSavingsTransfers"
+                    name="One-off transfers"
+                    fill="#38bdf8"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={32}
                   />
                 </BarChart>
               </ResponsiveContainer>

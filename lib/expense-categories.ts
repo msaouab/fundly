@@ -82,7 +82,7 @@ export const CATEGORY_CONFIG: Record<ExpenseCategory, CategoryConfigEntry> = {
     segmentClass: "bg-primary/25",
   },
   SAVINGS_CONTRIBUTION: {
-    label: "Savings contribution",
+    label: "Savings transfer",
     icon: "🏦",
     segmentClass: "bg-blue-500/80",
   },

@@ -16,7 +16,7 @@ async function fetchMonthlyFlowSeries(
     deltas.map(async (delta) => {
       const { year: y, month: m } = addMonths(endYear, endMonth, delta);
       const { start, end } = monthRangeLocal(y, m);
-      const [incomeAgg, expenseAgg, savingsAgg] = await Promise.all([
+      const [incomeAgg, expenseAgg, recSav, onceSav] = await Promise.all([
         prisma.income.aggregate({
           where: { userId, date: { gte: start, lte: end } },
           _sum: { amount: true },
@@ -30,28 +30,50 @@ async function fetchMonthlyFlowSeries(
             userId,
             date: { gte: start, lte: end },
             category: "SAVINGS_CONTRIBUTION",
+            isRecurring: true,
+          },
+          _sum: { amount: true },
+        }),
+        prisma.expense.aggregate({
+          where: {
+            userId,
+            date: { gte: start, lte: end },
+            category: "SAVINGS_CONTRIBUTION",
+            isRecurring: false,
           },
           _sum: { amount: true },
         }),
       ]);
       const income = Number(incomeAgg._sum.amount ?? 0);
       const expense = Number(expenseAgg._sum.amount ?? 0);
-      const savingsContribution = Number(savingsAgg._sum.amount ?? 0);
+      const recurringSavingsTransfers = Number(recSav._sum.amount ?? 0);
+      const oneOffSavingsTransfers = Number(onceSav._sum.amount ?? 0);
+      const savingsContribution = recurringSavingsTransfers + oneOffSavingsTransfers;
+      const savedFromIncome = income - expense + savingsContribution;
+      const remainderAfterFixedSavings = savedFromIncome - recurringSavingsTransfers;
       return {
         monthKey: formatMonthKey(y, m),
         label: format(new Date(y, m - 1, 1), "MMM"),
         income,
         expense,
-        net: income - expense + savingsContribution,
+        savedFromIncome,
+        net: savedFromIncome,
+        remainderAfterFixedSavings,
+        recurringSavingsTransfers,
+        oneOffSavingsTransfers,
       };
     }),
   );
 }
 
-async function fetchPreviousMonthNet(userId: string, year: number, month: number): Promise<number> {
+async function fetchPreviousMonthCashFlowTotals(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<{ grossRemainder: number; remainderAfterFixed: number }> {
   const { year: py, month: pm } = addMonths(year, month, -1);
   const { start, end } = monthRangeLocal(py, pm);
-  const [incomeAgg, expenseAgg, savingsAgg] = await Promise.all([
+  const [incomeAgg, expenseAgg, recSav, onceSav] = await Promise.all([
     prisma.income.aggregate({
       where: { userId, date: { gte: start, lte: end } },
       _sum: { amount: true },
@@ -65,14 +87,28 @@ async function fetchPreviousMonthNet(userId: string, year: number, month: number
         userId,
         date: { gte: start, lte: end },
         category: "SAVINGS_CONTRIBUTION",
+        isRecurring: true,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.expense.aggregate({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+        category: "SAVINGS_CONTRIBUTION",
+        isRecurring: false,
       },
       _sum: { amount: true },
     }),
   ]);
   const income = Number(incomeAgg._sum.amount ?? 0);
   const expense = Number(expenseAgg._sum.amount ?? 0);
-  const savingsContribution = Number(savingsAgg._sum.amount ?? 0);
-  return income - expense + savingsContribution;
+  const savingsContribution =
+    Number(recSav._sum.amount ?? 0) + Number(onceSav._sum.amount ?? 0);
+  const recurringSavingsTransfers = Number(recSav._sum.amount ?? 0);
+  const grossRemainder = income - expense + savingsContribution;
+  const remainderAfterFixed = grossRemainder - recurringSavingsTransfers;
+  return { grossRemainder, remainderAfterFixed };
 }
 
 function pickLargestExpense(
@@ -92,11 +128,11 @@ function pickLargestExpense(
 }
 
 export async function fetchDashboardData(userId: string, year: number, month: number): Promise<DashboardData> {
-  const [incomePage, expensePage, flowSeries, previousMonthNet] = await Promise.all([
+  const [incomePage, expensePage, flowSeries, previousMonthTotals] = await Promise.all([
     fetchIncomesPageData(userId, year, month),
     fetchExpensesPageData(userId, year, month),
     fetchMonthlyFlowSeries(userId, year, month, 6),
-    fetchPreviousMonthNet(userId, year, month),
+    fetchPreviousMonthCashFlowTotals(userId, year, month),
   ]);
 
   const currency = incomePage.currency || expensePage.currency || "MAD";
@@ -109,7 +145,8 @@ export async function fetchDashboardData(userId: string, year: number, month: nu
     categoryBreakdown: expensePage.breakdown,
     incomeSources: sourcesSorted,
     flowSeries,
-    previousMonthNet,
+    previousMonthNet: previousMonthTotals.grossRemainder,
+    previousMonthRemainderAfterFixed: previousMonthTotals.remainderAfterFixed,
     largestExpense: pickLargestExpense(
       expensePage.expenses
         .filter((e) => e.category !== "SAVINGS_CONTRIBUTION")

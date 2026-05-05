@@ -10,8 +10,14 @@ export type MonthlyFlowPoint = {
   label: string;
   income: number;
   expense: number;
-  /** Net cash flow: income − expense + savings contributions (“Savings” bar in chart). */
+  /** Income minus spending excluding savings-category rows (implicit “remainder” room). */
+  savedFromIncome: number;
+  /** Same value as savedFromIncome; kept for wording parity with KPIs. */
   net: number;
+  /** Gross remainder − planned recurring savings transfers (discretionary room). */
+  remainderAfterFixedSavings: number;
+  recurringSavingsTransfers: number;
+  oneOffSavingsTransfers: number;
 };
 
 export type DashboardHighlight = {
@@ -26,7 +32,9 @@ export type DashboardData = {
   categoryBreakdown: CategoryBreakdown[];
   incomeSources: IncomeSource[];
   flowSeries: MonthlyFlowPoint[];
-  /** Net (income − expenses + savings contributions) for the month before the selected month. */
+  /** Gross remainder (income − spend excl. transfers) for the month before the selected month. */
   previousMonthNet: number;
+  /** Remainder after planned recurring transfers for the month before the selected month. */
+  previousMonthRemainderAfterFixed: number;
   largestExpense: DashboardHighlight;
 };

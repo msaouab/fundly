@@ -92,27 +92,49 @@ export function ExpensesView({
     let extraFixed = 0;
     let extraVariable = 0;
     let extraSavingsContribution = 0;
+    let extraRecurringTransfer = 0;
+    let extraOneOffTransfer = 0;
     for (const p of pendingExpenses) {
       extraTotal += p.amount;
       if (p.kind === "FIXED") extraFixed += p.amount;
       else extraVariable += p.amount;
-      if (p.category === "SAVINGS_CONTRIBUTION") extraSavingsContribution += p.amount;
+      if (p.category === "SAVINGS_CONTRIBUTION") {
+        extraSavingsContribution += p.amount;
+        if (p.isRecurring) extraRecurringTransfer += p.amount;
+        else extraOneOffTransfer += p.amount;
+      }
     }
     const total = summary.total + extraTotal;
     const fixed = summary.fixed + extraFixed;
     const variable = summary.variable + extraVariable;
     const savingsContribution = summary.savingsContribution + extraSavingsContribution;
+    const recurringSavingsTransfer =
+      summary.recurringSavingsTransfer + extraRecurringTransfer;
+    const oneOffSavingsTransfer = summary.oneOffSavingsTransfer + extraOneOffTransfer;
     const totalIncome = summary.totalIncome;
-    const net = totalIncome - total + savingsContribution;
-    const savingsRate = totalIncome > 0 ? (net / totalIncome) * 100 : 0;
+    const spendExcludingSavingsTransfers = total - savingsContribution;
+    const net = totalIncome - spendExcludingSavingsTransfers;
+    const remainingIncome = net;
+    const remainingIncomeAfterFixedSavings = remainingIncome - recurringSavingsTransfer;
+    const cashAfterAllExpenses = totalIncome - total;
+    const savingsRate = totalIncome > 0 ? (remainingIncome / totalIncome) * 100 : 0;
+    const discretionaryRateAfterFixed =
+      totalIncome > 0 ? (remainingIncomeAfterFixedSavings / totalIncome) * 100 : 0;
     return {
       total,
       fixed,
       variable,
       savingsContribution,
+      recurringSavingsTransfer,
+      oneOffSavingsTransfer,
       totalIncome,
       net,
+      spendExcludingSavingsTransfers,
+      remainingIncome,
+      remainingIncomeAfterFixedSavings,
+      cashAfterAllExpenses,
       savingsRate,
+      discretionaryRateAfterFixed,
     };
   }, [pendingExpenses, summary]);
 

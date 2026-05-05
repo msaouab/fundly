@@ -23,6 +23,9 @@ export async function SavingsPageContent({
       currency={data.currency}
       monthly={data.monthly}
       previousMonthSavedFromIncome={data.previousMonthSavedFromIncome}
+      previousMonthSavedFromIncomeAfterFixedSavings={
+        data.previousMonthSavedFromIncomeAfterFixedSavings
+      }
       global={data.global}
       trend={data.trend}
     />

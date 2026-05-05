@@ -29,6 +29,7 @@ export async function DashboardAuthenticatedContent({
       incomeSources={data.incomeSources}
       flowSeries={data.flowSeries}
       previousMonthNet={data.previousMonthNet}
+      previousMonthRemainderAfterFixed={data.previousMonthRemainderAfterFixed}
       largestExpense={data.largestExpense}
     />
   );

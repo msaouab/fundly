@@ -19,6 +19,7 @@ type SavingsViewProps = {
   currency: string;
   monthly: MonthlySavings;
   previousMonthSavedFromIncome: number;
+  previousMonthSavedFromIncomeAfterFixedSavings: number;
   global: GlobalSavings;
   trend: SavingsPoint[];
 };
@@ -42,6 +43,7 @@ export function SavingsView({
   currency,
   monthly,
   previousMonthSavedFromIncome,
+  previousMonthSavedFromIncomeAfterFixedSavings,
   global,
   trend,
 }: SavingsViewProps) {
@@ -59,10 +61,12 @@ export function SavingsView({
     return out;
   }, [year, month]);
 
-  const monthDelta = monthly.savedFromIncome - previousMonthSavedFromIncome;
-  const monthDeltaPositive = monthDelta >= 0;
-  const savedFromIncomePositive = monthly.savedFromIncome >= 0;
-  const totalSavedFromIncomePositive = global.totalSavedFromIncome >= 0;
+  const monthDeltaAfterFixed =
+    monthly.savedFromIncomeAfterFixedSavings - previousMonthSavedFromIncomeAfterFixedSavings;
+  const monthDeltaGross = monthly.savedFromIncome - previousMonthSavedFromIncome;
+  const monthDeltaAfterFixedPositive = monthDeltaAfterFixed >= 0;
+  const savedFromIncomeAfterFixedPositive = monthly.savedFromIncomeAfterFixedSavings >= 0;
+  const totalSavedFromIncomeAfterFixedPositive = global.totalSavedFromIncomeAfterFixedSavings >= 0;
 
   const monthlyExpensePctOfIncome =
     monthly.income > 0 ? Math.min(100, (monthly.expense / monthly.income) * 100) : monthly.expense > 0 ? 100 : 0;
@@ -86,8 +90,11 @@ export function SavingsView({
             Savings
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Surplus from income after non-transfer spending, plus tracked savings transfers from
-            expenses.
+            <strong className="font-medium text-foreground">Gross remainder</strong> is income minus
+            spending excluding savings-category rows. <strong className="font-medium text-foreground">Remaining after fixed saving</strong> subtracts planned (recurring) savings transfers from that gross
+            room—one-off transfers stay shown separately.
+            <strong className="font-medium text-foreground"> Planned transfers</strong> use the savings category with &ldquo;recurring&rdquo; checked (weekly, monthly …).{' '}
+            <strong className="font-medium text-foreground">One-off moves</strong> sweep the category without recurring.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -110,11 +117,11 @@ export function SavingsView({
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" aria-labelledby="savings-month-kpis">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-labelledby="savings-month-kpis">
         <h2 id="savings-month-kpis" className="sr-only">
           This month
         </h2>
-        <Card className="border-border xl:col-span-2 dark:border-zinc-800">
+        <Card className="border-border xl:col-span-2 2xl:col-span-2 dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Income vs expenses
@@ -187,80 +194,124 @@ export function SavingsView({
                   Total expenses exceeded income this month.
                 </p>
               ) : null}
+              <p className="text-xs text-muted-foreground">
+                Cash after <span className="font-medium text-foreground">every</span> tracked row (incl. transfers):{' '}
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums text-foreground",
+                    monthly.cashAfterAllExpenses < 0 && "text-destructive",
+                  )}
+                >
+                  {formatMoney(monthly.cashAfterAllExpenses, currency)}
+                </span>
+              </p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Saved from income
+              Remaining income (after fixed savings)
             </CardTitle>
             <CardDescription className="text-xs leading-snug">
-              Income minus spending, excluding savings transfers as spend.
+              Gross remainder {formatMoney(monthly.savedFromIncome, currency)} minus planned transfers{' '}
+              {formatMoney(monthly.recurringSavingsTransfer, currency)}.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p
               className={cn(
                 "text-2xl font-semibold tabular-nums",
-                savedFromIncomePositive ? "text-primary" : "text-destructive",
+                savedFromIncomeAfterFixedPositive ? "text-primary" : "text-destructive",
               )}
             >
-              {formatMoney(monthly.savedFromIncome, currency)}
+              {formatMoney(monthly.savedFromIncomeAfterFixedSavings, currency)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatPercent(monthly.savingsRateFromIncome, 1)} of income
+              {formatPercent(monthly.discretionaryRateFromIncomeAfterFixed, 1)} of income (discretionary)
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Gross remainder:{" "}
+              <span className="font-medium tabular-nums text-foreground">
+                {formatMoney(monthly.savedFromIncome, currency)}
+              </span>{" "}
+              ({formatPercent(monthly.savingsRateFromIncome, 1)})
             </p>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-zinc-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Savings transfer</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Planned transfers</CardTitle>
             <CardDescription className="text-xs leading-snug">
-              Fixed transfer using expense category SAVINGS_CONTRIBUTION.
+              Savings category rows marked recurring (weekly/monthly/yearly …).
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-blue-600 dark:text-blue-400">
-              {formatMoney(monthly.savingsContribution, currency)}
+            <p className="text-2xl font-semibold tabular-nums text-blue-700 dark:text-blue-400">
+              {formatMoney(monthly.recurringSavingsTransfer, currency)}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-border md:col-span-2 xl:col-span-1 dark:border-zinc-800">
+        <Card className="border-border dark:border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">One-off transfers</CardTitle>
+            <CardDescription className="text-xs leading-snug">
+              Same savings category, not flagged as recurring one-off deposits.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums text-sky-600 dark:text-sky-400">
+              {formatMoney(monthly.oneOffSavingsTransfer, currency)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-border md:col-span-2 xl:col-span-2 2xl:col-span-1 dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Vs previous month</CardTitle>
-            <CardDescription className="text-xs">Change in saved-from-income.</CardDescription>
+            <CardDescription className="text-xs">Change in remaining income after planned saves.</CardDescription>
           </CardHeader>
           <CardContent>
             <p
               className={cn(
                 "text-2xl font-semibold tabular-nums",
-                monthDeltaPositive ? "text-primary" : "text-destructive",
+                monthDeltaAfterFixedPositive ? "text-primary" : "text-destructive",
               )}
             >
-              {monthDeltaPositive ? "+" : ""}
-              {formatMoney(monthDelta, currency)}
+              {monthDeltaAfterFixedPositive ? "+" : ""}
+              {formatMoney(monthDeltaAfterFixed, currency)}
             </p>
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
-              {monthDeltaPositive ? (
+              {monthDeltaAfterFixedPositive ? (
                 <TrendingUp className="size-3.5" />
               ) : (
                 <TrendingDown className="size-3.5" />
               )}
-              vs prior month surplus
+              after fixed saves vs prior month
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Gross remainder vs prior month:{" "}
+              <span
+                className={cn(
+                  "font-medium tabular-nums",
+                  monthDeltaGross >= 0 ? "text-foreground" : "text-destructive",
+                )}
+              >
+                {monthDeltaGross >= 0 ? "+" : ""}
+                {formatMoney(monthDeltaGross, currency)}
+              </span>
             </p>
           </CardContent>
         </Card>
       </section>
 
       <section
-        className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
         aria-labelledby="savings-global-kpis"
       >
         <h2 id="savings-global-kpis" className="sr-only">
           All-time
         </h2>
-        <Card className="border-border xl:col-span-2 dark:border-zinc-800">
+        <Card className="border-border xl:col-span-2 2xl:col-span-2 dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Income vs expenses (lifetime)
@@ -337,37 +388,59 @@ export function SavingsView({
                   Total expenses have exceeded total income so far.
                 </p>
               ) : null}
+              <p className="text-xs text-muted-foreground">
+                Cash after <span className="font-medium text-foreground">all</span> rows (lifetime):{' '}
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums text-foreground",
+                    global.lifetimeCashAfterAllExpenses < 0 && "text-destructive",
+                  )}
+                >
+                  {formatMoney(global.lifetimeCashAfterAllExpenses, currency)}
+                </span>
+              </p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Lifetime saved from income
+              Lifetime discretionary remainder
             </CardTitle>
-            <CardDescription className="text-xs">Income minus non-transfer spending, all dates.</CardDescription>
+            <CardDescription className="text-xs">
+              Lifetime gross remainder minus recurring planned transfers (same definition as KPI above).
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p
               className={cn(
                 "text-2xl font-semibold tabular-nums",
-                totalSavedFromIncomePositive ? "text-primary" : "text-destructive",
+                totalSavedFromIncomeAfterFixedPositive ? "text-primary" : "text-destructive",
               )}
             >
-              {formatMoney(global.totalSavedFromIncome, currency)}
+              {formatMoney(global.totalSavedFromIncomeAfterFixedSavings, currency)}
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Lifetime gross remainder:{" "}
+              <span className="font-medium tabular-nums text-foreground">
+                {formatMoney(global.totalSavedFromIncome, currency)}
+              </span>
             </p>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-zinc-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Lifetime savings rate
+              Lifetime discretionary rate
             </CardTitle>
-            <CardDescription className="text-xs">From surplus vs lifetime income.</CardDescription>
+            <CardDescription className="text-xs">Lifetime remaining after planned saves divided by lifetime income.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold tabular-nums text-primary">
-              {formatPercent(global.lifetimeSavingsRateFromIncome, 1)}
+              {formatPercent(global.lifetimeDiscretionaryRateFromIncome, 1)}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Gross room / income: {formatPercent(global.lifetimeSavingsRateFromIncome, 1)}
             </p>
           </CardContent>
         </Card>
@@ -375,15 +448,27 @@ export function SavingsView({
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <PiggyBank className="size-4 text-primary" aria-hidden />
-              Lifetime savings transfers
+              Planned transfers (lifetime)
             </CardTitle>
-            <CardDescription className="text-xs">
-              Total recorded as SAVINGS_CONTRIBUTION on expenses.
-            </CardDescription>
+            <CardDescription className="text-xs">Recurring savings-category moves.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-blue-600 dark:text-blue-400">
-              {formatMoney(global.totalSavingsContribution, currency)}
+            <p className="text-2xl font-semibold tabular-nums text-blue-700 dark:text-blue-400">
+              {formatMoney(global.totalRecurringSavingsTransfer, currency)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-border dark:border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">One-off transfers (lifetime)</CardTitle>
+            <CardDescription className="text-xs">Non-recurring savings-category moves.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums text-sky-600 dark:text-sky-400">
+              {formatMoney(global.totalOneOffSavingsTransfer, currency)}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Combined: {formatMoney(global.totalSavingsContribution, currency)}
             </p>
           </CardContent>
         </Card>
@@ -393,7 +478,7 @@ export function SavingsView({
         <CardHeader>
           <CardTitle className="text-base font-semibold">Cash flow · last 12 months</CardTitle>
           <CardDescription>
-            Income and total expenses versus surplus from income and tracked savings transfers.
+            Green = remaining income after planned recurring saves (not one-offs). Planned and one-off transfer amounts are stacked for context.
           </CardDescription>
         </CardHeader>
         <CardContent className="w-full min-w-0 pb-4 pt-0">
@@ -421,8 +506,9 @@ export function SavingsView({
                     const order: Record<string, number> = {
                       income: 0,
                       expense: 1,
-                      savedFromIncome: 2,
-                      savingsContribution: 3,
+                      savedFromIncomeAfterFixedSavings: 2,
+                      recurringSavingsTransfer: 3,
+                      oneOffSavingsTransfer: 4,
                     };
                     return order[String(item.dataKey ?? "")] ?? 99;
                   }}
@@ -437,21 +523,28 @@ export function SavingsView({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: "12px" }} />
-                <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="expense" name="Expenses (total)" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                <Bar dataKey="expense" name="Expenses (total)" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={24} />
                 <Bar
-                  dataKey="savedFromIncome"
-                  name="Saved from income"
+                  dataKey="savedFromIncomeAfterFixedSavings"
+                  name="Remainder (after planned saves)"
                   fill="#059669"
                   radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
+                  maxBarSize={24}
                 />
                 <Bar
-                  dataKey="savingsContribution"
-                  name="Savings transfer"
-                  fill="#2563eb"
+                  dataKey="recurringSavingsTransfer"
+                  name="Planned transfers"
+                  fill="#1d4ed8"
                   radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
+                  maxBarSize={24}
+                />
+                <Bar
+                  dataKey="oneOffSavingsTransfer"
+                  name="One-off transfers"
+                  fill="#38bdf8"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={24}
                 />
               </BarChart>
             </ResponsiveContainer>
