@@ -324,6 +324,14 @@ export function DashboardView({
                       borderRadius: 8,
                       color: "var(--popover-foreground)",
                     }}
+                    itemSorter={(item) => {
+                      const order: Record<string, number> = {
+                        income: 0,
+                        expense: 1,
+                        net: 2,
+                      };
+                      return order[String(item.dataKey ?? "")] ?? 99;
+                    }}
                     formatter={(value, name) => [
                       formatMoney(Number(value ?? 0), currency),
                       String(name ?? ""),
