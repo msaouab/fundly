@@ -29,6 +29,26 @@ function num(d: { toString(): string }): number {
   return Number(d);
 }
 
+/** Next.js Flight must receive plain JSON for client props — strip odd Prisma/driver shapes (e.g. nested Decimal). */
+export function flightSafeJson(value: unknown): unknown {
+  if (value === null) return null;
+  if (typeof value === "undefined") return null;
+  if (
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+  try {
+    return JSON.parse(
+      JSON.stringify(value, (_, v: unknown) => (typeof v === "bigint" ? v.toString() : v)),
+    ) as unknown;
+  } catch {
+    return {};
+  }
+}
+
 export async function fetchSimulationsPageData(userId: string, nowYear: number, nowMonth: number) {
   const { start, end } = monthRangeLocal(nowYear, nowMonth);
 
@@ -97,8 +117,8 @@ export async function fetchSimulationsPageData(userId: string, nowYear: number, 
         goalId: s.goalId,
         type: s.type,
         name: s.name,
-        configJson: s.configJson,
-        resultJson: s.resultJson,
+        configJson: flightSafeJson(s.configJson),
+        resultJson: flightSafeJson(s.resultJson),
         createdAt: s.createdAt.toISOString(),
       }),
     ),

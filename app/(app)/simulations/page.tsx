@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "Simulations",
 };
 
+/** Uses auth-backed data fetch + Prisma; must not participate in mistaken static shells. */
+export const dynamic = "force-dynamic";
+
 export default function SimulationsPage() {
   return (
     <Suspense fallback={<SimSkeleton />}>
