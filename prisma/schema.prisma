@@ -39,6 +39,7 @@ enum ExpenseCategory {
   EDUCATION
   TRAVEL
   DONATIONS
+  SAVINGS_CONTRIBUTION
   OTHER
 }
 

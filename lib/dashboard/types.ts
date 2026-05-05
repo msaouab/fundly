@@ -10,6 +10,7 @@ export type MonthlyFlowPoint = {
   label: string;
   income: number;
   expense: number;
+  /** Net cash flow: income − expense + savings contributions (“Savings” bar in chart). */
   net: number;
 };
 
@@ -25,7 +26,7 @@ export type DashboardData = {
   categoryBreakdown: CategoryBreakdown[];
   incomeSources: IncomeSource[];
   flowSeries: MonthlyFlowPoint[];
-  /** Net (income − expenses) for the calendar month before the selected month. */
+  /** Net (income − expenses + savings contributions) for the month before the selected month. */
   previousMonthNet: number;
   largestExpense: DashboardHighlight;
 };

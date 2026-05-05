@@ -91,21 +91,25 @@ export function ExpensesView({
     let extraTotal = 0;
     let extraFixed = 0;
     let extraVariable = 0;
+    let extraSavingsContribution = 0;
     for (const p of pendingExpenses) {
       extraTotal += p.amount;
       if (p.kind === "FIXED") extraFixed += p.amount;
       else extraVariable += p.amount;
+      if (p.category === "SAVINGS_CONTRIBUTION") extraSavingsContribution += p.amount;
     }
     const total = summary.total + extraTotal;
     const fixed = summary.fixed + extraFixed;
     const variable = summary.variable + extraVariable;
+    const savingsContribution = summary.savingsContribution + extraSavingsContribution;
     const totalIncome = summary.totalIncome;
-    const net = totalIncome - total;
+    const net = totalIncome - total + savingsContribution;
     const savingsRate = totalIncome > 0 ? (net / totalIncome) * 100 : 0;
     return {
       total,
       fixed,
       variable,
+      savingsContribution,
       totalIncome,
       net,
       savingsRate,
