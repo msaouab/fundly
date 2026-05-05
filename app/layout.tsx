@@ -20,6 +20,13 @@ export const metadata: Metadata = {
   },
   description:
     "Track income and expenses, monitor monthly budget health, and run credit and loan simulations before you commit.",
+  manifest: "/manifest.webmanifest",
+  applicationName: "Fundly",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Fundly",
+  },
 };
 
 export default function RootLayout({
