@@ -1,5 +1,6 @@
-const CACHE_NAME = "fundly-static-v1";
-const STATIC_ASSETS = ["/", "/manifest.webmanifest", "/icon.png", "/apple-icon.png"];
+const CACHE_NAME = "fundly-static-v3";
+const STATIC_ASSETS = ["/manifest.webmanifest", "/icon.png", "/apple-icon.png"];
+const STATIC_DESTINATIONS = new Set(["style", "script", "image", "font"]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -31,10 +32,21 @@ self.addEventListener("fetch", (event) => {
   // Leave auth/database API calls untouched.
   if (url.pathname.startsWith("/api/")) return;
 
+  // Never cache Next.js data / RSC payloads or any query-string request.
+  if (url.search) return;
+
+  // Cache only static assets; keep app/document data always fresh.
+  const isStaticAsset = STATIC_DESTINATIONS.has(request.destination);
+
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/") || Response.error()),
+      fetch(request).catch(() => Response.error()),
     );
+    return;
+  }
+
+  if (!isStaticAsset) {
+    event.respondWith(fetch(request));
     return;
   }
 
