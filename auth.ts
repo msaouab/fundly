@@ -32,8 +32,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        passkeyToken: { label: "Passkey token", type: "text" },
       },
       authorize: async (credentials) => {
+        const passkeyToken = credentials?.passkeyToken;
+        if (typeof passkeyToken === "string" && passkeyToken) {
+          const now = new Date();
+          const found = await prisma.passkeyLoginToken.findUnique({
+            where: { token: passkeyToken },
+            include: { user: true },
+          });
+          if (
+            !found ||
+            found.consumedAt ||
+            found.expiresAt <= now
+          ) {
+            return null;
+          }
+          await prisma.passkeyLoginToken.update({
+            where: { id: found.id },
+            data: { consumedAt: now },
+          });
+          // Best effort cleanup for old tokens.
+          void prisma.passkeyLoginToken.deleteMany({
+            where: { OR: [{ expiresAt: { lt: now } }, { consumedAt: { not: null } }] },
+          });
+          return {
+            id: found.user.id,
+            email: found.user.email,
+            name: found.user.name,
+          };
+        }
+
         const email = credentials?.email;
         const password = credentials?.password;
         if (typeof email !== "string" || typeof password !== "string") {
@@ -46,6 +76,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!user) return null;
         const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
+        // Best effort cleanup when users sign in by password.
+        void prisma.passkeyLoginToken.deleteMany({
+          where: { expiresAt: { lt: new Date() } },
+        });
         return {
           id: user.id,
           email: user.email,

@@ -296,9 +296,11 @@ export function DashboardView({
         <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
           <CardHeader>
             <CardTitle id="dash-flow-chart-title" className="text-base font-semibold">
-              Income and expenses · last 6 months
+              Income, expenses, and savings · last 6 months
             </CardTitle>
-            <CardDescription>Bars grouped by calendar month ending on your selection.</CardDescription>
+            <CardDescription>
+              Grouped bars for income, expenses, and savings by month.
+            </CardDescription>
           </CardHeader>
           <CardContent className="w-full min-w-0 pb-4 pt-0">
             <div
@@ -335,6 +337,13 @@ export function DashboardView({
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={40} />
                   <Bar dataKey="expense" name="Expenses" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar
+                    dataKey="net"
+                    name="Savings"
+                    fill="#2563eb"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

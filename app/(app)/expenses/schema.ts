@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeDateToLocalNoon } from "@/lib/date";
 
 export const expenseKindSchema = z.enum(["FIXED", "VARIABLE"]);
 
@@ -25,7 +26,7 @@ export const expenseRecurrenceSchema = z
 export const expenseFormSchema = z
   .object({
     amount: z.coerce.number().positive("Amount must be positive"),
-    date: z.coerce.date(),
+    date: z.coerce.date().transform(normalizeDateToLocalNoon),
     description: z
       .string()
       .max(200)

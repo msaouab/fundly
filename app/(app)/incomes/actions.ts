@@ -40,6 +40,13 @@ function serializeIncome(row: {
   };
 }
 
+function revalidateFinancePages() {
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/incomes");
+  revalidatePath("/expenses");
+}
+
 async function requireUserId(): Promise<string> {
   const session = await auth();
   const id = session?.user?.id;
@@ -101,7 +108,7 @@ export async function addIncome(
         updatedAt: true,
       },
     });
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: serializeIncome(row) };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to add income";
@@ -158,7 +165,7 @@ export async function editIncome(
         updatedAt: true,
       },
     });
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: serializeIncome(row) };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update";
@@ -177,7 +184,7 @@ export async function deleteIncome(id: string): Promise<ActionResult<{ id: strin
       return { ok: false, error: "Income not found" };
     }
     await prisma.income.delete({ where: { id } });
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: { id } };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete";
@@ -238,7 +245,7 @@ export async function duplicateIncomes(
       note: row.note,
     }));
     const result = await prisma.income.createMany({ data });
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: { count: result.count } };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Duplicate failed";

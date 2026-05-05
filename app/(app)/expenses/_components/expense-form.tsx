@@ -4,7 +4,7 @@ import { useEffect, useRef, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
-import { useForm, Controller, type Resolver } from "react-hook-form";
+import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addExpense } from "../actions";
@@ -33,10 +33,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { cn } from "@/lib/utils";
 import { ExpenseTypeToggle } from "./expense-type-toggle";
+import { normalizeDateToLocalNoon } from "@/lib/date";
 
 const defaultValues: ExpenseFormValues = {
   amount: 0,
-  date: new Date(),
+  date: normalizeDateToLocalNoon(new Date()),
   description: "",
   kind: "FIXED",
   category: "HOUSING",
@@ -63,7 +64,7 @@ function buildOptimisticExpense(
     kind: values.kind,
     category: values.category,
     amount,
-    date: values.date.toISOString(),
+    date: normalizeDateToLocalNoon(values.date).toISOString(),
     currency: values.currency || codeCurrency,
     isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
     recurrenceFrequency:
@@ -93,7 +94,6 @@ type ExpenseFormProps = {
 export function ExpenseForm({
   currency = "MAD",
   userId,
-  monthExpenseTotal = 0,
   monthTotalIncome = 0,
   amountFocusRef,
   onOptimisticAdd,
@@ -108,9 +108,10 @@ export function ExpenseForm({
     defaultValues: { ...defaultValues, currency },
   });
 
-  const kind = form.watch("kind");
-  const isRecurring = form.watch("isRecurring");
-  const noteLen = (form.watch("note") ?? "").length;
+  const kind = useWatch({ control: form.control, name: "kind" });
+  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
+  const note = useWatch({ control: form.control, name: "note" });
+  const noteLen = (note ?? "").length;
 
   const {
     ref: amountFieldRef,
@@ -173,7 +174,7 @@ export function ExpenseForm({
         form.reset({
           ...defaultValues,
           currency,
-          date: new Date(),
+          date: normalizeDateToLocalNoon(new Date()),
           kind: values.kind,
           category: values.kind === "FIXED" ? "HOUSING" : "FOOD_GROCERIES",
         });

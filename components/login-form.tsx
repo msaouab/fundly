@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/password-input";
+import { PasskeyLoginButton } from "@/components/passkey-login-button";
 
 type LoginFormProps = {
   showRegisteredBanner?: boolean;
@@ -86,6 +87,12 @@ export function LoginForm({ showRegisteredBanner }: LoginFormProps) {
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <PasskeyLoginButton
+        getEmail={() => {
+          const el = document.getElementById("email") as HTMLInputElement | null;
+          return el?.value ?? "";
+        }}
+      />
       <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         No account?{" "}
         <Link

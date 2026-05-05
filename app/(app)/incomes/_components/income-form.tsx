@@ -4,7 +4,7 @@ import { useEffect, useRef, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
-import { useForm, Controller, type Resolver } from "react-hook-form";
+import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addIncome } from "../actions";
@@ -30,10 +30,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { normalizeDateToLocalNoon } from "@/lib/date";
 
 const defaultValues: IncomeFormValues = {
   amount: 0,
-  date: new Date(),
+  date: normalizeDateToLocalNoon(new Date()),
   source: "",
   type: "SALARY",
   currency: "MAD",
@@ -59,7 +60,7 @@ function buildOptimisticIncome(
     source: values.source,
     type: values.type,
     amount,
-    date: values.date.toISOString(),
+    date: normalizeDateToLocalNoon(values.date).toISOString(),
     currency: values.currency || codeCurrency,
     isRecurring: values.isRecurring,
     recurrenceFrequency: values.recurrenceFrequency ?? null,
@@ -95,9 +96,10 @@ export function IncomeForm({
     defaultValues: { ...defaultValues, currency },
   });
 
-  const type = form.watch("type");
-  const isRecurring = form.watch("isRecurring");
-  const noteLen = (form.watch("note") ?? "").length;
+  const type = useWatch({ control: form.control, name: "type" });
+  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
+  const note = useWatch({ control: form.control, name: "note" });
+  const noteLen = (note ?? "").length;
   const showRecurring = type === "SALARY" || type === "PASSIVE";
 
   const {
@@ -154,7 +156,11 @@ export function IncomeForm({
       }
       if (res.ok) {
         toast.success("Income added");
-        form.reset({ ...defaultValues, currency, date: new Date() });
+        form.reset({
+          ...defaultValues,
+          currency,
+          date: normalizeDateToLocalNoon(new Date()),
+        });
         router.refresh();
       } else {
         toast.error(res.error);

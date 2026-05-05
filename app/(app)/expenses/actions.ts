@@ -42,6 +42,13 @@ function serializeExpense(row: {
   };
 }
 
+function revalidateFinancePages() {
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/incomes");
+  revalidatePath("/expenses");
+}
+
 async function requireUserId(): Promise<string> {
   const session = await auth();
   const id = session?.user?.id;
@@ -108,8 +115,7 @@ export async function addExpense(
       },
       select: expenseSelect,
     });
-    revalidatePath("/expenses");
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: serializeExpense(row) };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to add expense";
@@ -154,8 +160,7 @@ export async function editExpense(
       },
       select: expenseSelect,
     });
-    revalidatePath("/expenses");
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: serializeExpense(row) };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update";
@@ -174,8 +179,7 @@ export async function deleteExpense(id: string): Promise<ActionResult<{ id: stri
       return { ok: false, error: "Expense not found" };
     }
     await prisma.expense.delete({ where: { id } });
-    revalidatePath("/expenses");
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: { id } };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete";
@@ -192,8 +196,7 @@ export async function deleteExpenses(ids: string[]): Promise<ActionResult<{ coun
     const result = await prisma.expense.deleteMany({
       where: { userId, id: { in: ids } },
     });
-    revalidatePath("/expenses");
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: { count: result.count } };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete";
@@ -256,8 +259,7 @@ export async function duplicateExpenses(
       note: row.note,
     }));
     const result = await prisma.expense.createMany({ data });
-    revalidatePath("/expenses");
-    revalidatePath("/incomes");
+    revalidateFinancePages();
     return { ok: true, data: { count: result.count } };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Duplicate failed";

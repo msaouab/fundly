@@ -8,6 +8,21 @@ export function PwaRegister() {
       return;
     }
 
+    const isLocalDev =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    if (isLocalDev) {
+      // Prevent stale SW-controlled HTML/data from causing hydration mismatch in dev.
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => void r.unregister());
+      });
+      if ("caches" in window) {
+        caches.keys().then((keys) => keys.forEach((k) => void caches.delete(k)));
+      }
+      return;
+    }
+
     navigator.serviceWorker
       .register("/sw.js")
       .catch(() => {

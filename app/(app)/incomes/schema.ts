@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeDateToLocalNoon } from "@/lib/date";
 
 export const incomeTypeSchema = z.enum([
   "SALARY",
@@ -16,7 +17,7 @@ export const recurrenceSchema = z
 export const incomeFormSchema = z
   .object({
     amount: z.coerce.number().positive("Amount must be positive"),
-    date: z.coerce.date(),
+    date: z.coerce.date().transform(normalizeDateToLocalNoon),
     source: z.string().trim().min(1, "Source is required").max(120),
     type: incomeTypeSchema,
     currency: z.string().default("MAD"),
