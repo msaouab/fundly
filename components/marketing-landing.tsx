@@ -8,8 +8,9 @@ import {
   PiggyBank,
   WalletCards,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const features = [
   {
@@ -67,17 +68,24 @@ export function MarketingLanding() {
             <span className="text-sm font-semibold tracking-tight sm:text-base">Fundly</span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-3" aria-label="Account">
-            <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
-              <Link href="/login">Sign in</Link>
-            </Button>
-            <Button size="sm" className="hidden sm:inline-flex" asChild>
-              <Link href="/register">
-                Create account <ArrowRight className="opacity-90" aria-hidden />
-              </Link>
-            </Button>
-            <Button size="sm" className="sm:hidden" asChild>
-              <Link href="/register">Join</Link>
-            </Button>
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "text-muted-foreground",
+              )}
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/register"
+              className={cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}
+            >
+              Create account <ArrowRight className="opacity-90" aria-hidden />
+            </Link>
+            <Link href="/register" className={cn(buttonVariants({ size: "sm" }), "sm:hidden")}>
+              Join
+            </Link>
           </nav>
         </div>
       </header>
@@ -101,15 +109,19 @@ export function MarketingLanding() {
               </p>
             </div>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:justify-start">
-              <Button size="lg" className="w-full sm:w-auto" asChild>
-                <Link href="/register">
-                  Create your free account
-                  <ArrowRight className="size-4 opacity-90" aria-hidden />
-                </Link>
-              </Button>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto" asChild>
-                <Link href="/login">I already have an account</Link>
-              </Button>
+              <Link
+                href="/register"
+                className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}
+              >
+                Create your free account
+                <ArrowRight className="size-4 opacity-90" aria-hidden />
+              </Link>
+              <Link
+                href="/login"
+                className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full sm:w-auto")}
+              >
+                I already have an account
+              </Link>
             </div>
             <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground lg:justify-start">
               <li>No credit card to try</li>
@@ -200,15 +212,19 @@ export function MarketingLanding() {
             Open an account in a minute—then tailor goals and simulations around how you actually live.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button size="lg" asChild>
-              <Link href="/register">
-                Get started
-                <ArrowRight className="size-4 opacity-90" aria-hidden />
-              </Link>
-            </Button>
-            <Button variant="outline" size="lg" className="bg-background/70 dark:bg-background/60" asChild>
-              <Link href="/login">Sign in instead</Link>
-            </Button>
+            <Link href="/register" className={buttonVariants({ size: "lg" })}>
+              Get started
+              <ArrowRight className="size-4 opacity-90" aria-hidden />
+            </Link>
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg" }),
+                "bg-background/70 dark:bg-background/60",
+              )}
+            >
+              Sign in instead
+            </Link>
           </div>
         </section>
       </main>

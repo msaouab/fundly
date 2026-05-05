@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { auth } from "@/auth";
+import { safeAuth } from "@/auth";
+
+/** Session + auth() use request headers — must not be statically prerendered. */
+export const dynamic = "force-dynamic";
 import { AppShell } from "@/components/app-shell";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { DashboardAuthenticatedContent } from "@/app/dashboard-auth-content";
@@ -8,7 +11,7 @@ import { MarketingLanding } from "@/components/marketing-landing";
 import { parseMonthParam } from "@/lib/month";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const session = await auth();
+  const session = await safeAuth();
   if (session?.user) {
     return { title: "Dashboard" };
   }
@@ -24,7 +27,7 @@ type PageProps = {
 };
 
 export default async function Home({ searchParams }: PageProps) {
-  const session = await auth();
+  const session = await safeAuth();
 
   if (session?.user) {
     const sp = await searchParams;

@@ -6,11 +6,15 @@ import { prisma } from "@/lib/prisma";
 const devWarnKey = "__fundlyAuthSecretWarned" as const;
 const globalForAuth = globalThis as unknown as Record<string, boolean | undefined>;
 
-function resolveAuthSecret(): string | undefined {
+function resolveAuthSecret(): string {
   const fromEnv =
     process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim();
   if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV === "production") return undefined;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AUTH_SECRET (or NEXTAUTH_SECRET) must be set in production. Generate one with: openssl rand -base64 32",
+    );
+  }
   if (!globalForAuth[devWarnKey]) {
     globalForAuth[devWarnKey] = true;
     console.warn(
@@ -73,3 +77,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+
+function isNextDynamicServerUsage(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const digest = (error as unknown as { digest?: unknown }).digest;
+  if (digest === "DYNAMIC_SERVER_USAGE") return true;
+  return error.message.includes("Dynamic server usage:");
+}
+
+/**
+ * Wraps auth() without swallowing Next.js dynamic-rendering signals (those must propagate).
+ * For other failures (bad JWT decode, misconfig edge cases), returns null so public pages render.
+ */
+export async function safeAuth() {
+  try {
+    return await auth();
+  } catch (error) {
+    if (isNextDynamicServerUsage(error)) throw error;
+    console.error("[auth] Session read failed:", error);
+    return null;
+  }
+}
