@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
-import { useCallback, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -44,14 +44,19 @@ const mobileItemClass = (active: boolean) =>
 
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
     try {
-      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+      if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1") {
+        startTransition(() => {
+          setSidebarCollapsed(true);
+        });
+      }
     } catch {
-      return false;
+      /* ignore */
     }
-  });
+  }, []);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {

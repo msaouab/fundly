@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Drive dark:* utilities from .dark (next-themes), not prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -29,23 +32,6 @@
   --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --popover: #18181b;
-    --popover-foreground: #fafafa;
-    --border: #3f3f46;
-    --muted: #27272a;
-    --muted-foreground: #a1a1aa;
-    --primary: #14b8a6;
-    --primary-foreground: #042f2e;
-    --destructive: #f87171;
-    --destructive-foreground: #450a0a;
-    --ring: #2dd4bf;
-  }
 }
 
 .dark {
