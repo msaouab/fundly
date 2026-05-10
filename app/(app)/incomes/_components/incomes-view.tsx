@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "../types";
 import type { IncomeType } from "@/generated/prisma/enums";
@@ -11,14 +10,7 @@ import { IncomeNetBar } from "./income-net-bar";
 import { IncomeSources } from "./income-sources";
 import { IncomeSummary } from "./income-summary";
 import { IncomeTable } from "./income-table";
-import { addMonths, formatMonthKey } from "@/lib/month";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MonthNavPicker } from "@/components/month-nav-picker";
 
 type IncomesViewProps = {
   userId: string;
@@ -110,19 +102,6 @@ export function IncomesView({
     setPendingIncomes((prev) => prev.filter((p) => p.id !== tempId));
   }, []);
 
-  const monthNavOptions = useMemo(() => {
-    const out: { key: string; label: string }[] = [];
-    for (let delta = -12; delta <= 12; delta++) {
-      const { year: y, month: m } = addMonths(year, month, delta);
-      const key = formatMonthKey(y, m);
-      out.push({
-        key,
-        label: format(new Date(y, m - 1, 1), "MMMM yyyy"),
-      });
-    }
-    return out;
-  }, [year, month]);
-
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -134,27 +113,13 @@ export function IncomesView({
             Track salary, freelance, passive income, and other money in for your household.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Month</span>
-          <Select
-            name="incomeMonth"
-            value={monthKey}
-            onValueChange={(key) => {
-              router.push(`/incomes?month=${key}`, { scroll: false });
-            }}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNavOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthNavPicker
+          monthKey={monthKey}
+          year={year}
+          month={month}
+          monthSelectName="incomeMonth"
+          onMonthChange={(key) => router.push(`/incomes?month=${key}`, { scroll: false })}
+        />
       </header>
 
       <IncomeSummary summary={adjustedSummary} currency={currency} />

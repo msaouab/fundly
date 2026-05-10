@@ -1,18 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "../types";
 import type { ExpenseCategory } from "@/generated/prisma/enums";
-import { addMonths, formatMonthKey } from "@/lib/month";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MonthNavPicker } from "@/components/month-nav-picker";
 import { DuplicateExpenseBanner } from "./duplicate-modal";
 import { ExpenseCategoryBar } from "./expense-category-bar";
 import { ExpenseForm } from "./expense-form";
@@ -154,19 +146,6 @@ export function ExpensesView({
   const monthExpenseTotalForForm =
     summary.total + pendingExpenses.reduce((s, p) => s + p.amount, 0);
 
-  const monthNavOptions = useMemo(() => {
-    const out: { key: string; label: string }[] = [];
-    for (let delta = -12; delta <= 12; delta++) {
-      const { year: y, month: m } = addMonths(year, month, delta);
-      const key = formatMonthKey(y, m);
-      out.push({
-        key,
-        label: format(new Date(y, m - 1, 1), "MMMM yyyy"),
-      });
-    }
-    return out;
-  }, [year, month]);
-
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -176,27 +155,14 @@ export function ExpensesView({
             Track fixed and variable spending, compare to income, and plan the month ahead.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Month</span>
-          <Select
-            name="expenseMonth"
-            value={monthKey}
-            onValueChange={(key) => {
-              router.push(`/expenses?month=${key}`, { scroll: false });
-            }}
-          >
-            <SelectTrigger className="w-[200px] dark:border-zinc-700">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNavOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthNavPicker
+          monthKey={monthKey}
+          year={year}
+          month={month}
+          monthSelectName="expenseMonth"
+          triggerClassName="dark:border-zinc-700"
+          onMonthChange={(key) => router.push(`/expenses?month=${key}`, { scroll: false })}
+        />
       </header>
 
       <ExpenseSummary summary={adjustedSummary} currency={currency} />

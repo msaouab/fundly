@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { MonthNavPicker } from "@/components/month-nav-picker";
 import {
   Bar,
   BarChart,
@@ -32,16 +33,8 @@ import type {
 } from "@/app/(app)/expenses/types";
 import type { IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney, formatPercent } from "@/lib/money";
-import { addMonths, formatMonthKey } from "@/lib/month";
 import { cn } from "@/lib/utils";
 import type { DashboardHighlight, MonthlyFlowPoint } from "@/lib/dashboard/types";
 
@@ -108,19 +101,6 @@ export function DashboardView({
 }: DashboardViewProps) {
   const router = useRouter();
 
-  const monthNavOptions = useMemo(() => {
-    const out: { key: string; label: string }[] = [];
-    for (let delta = -12; delta <= 12; delta++) {
-      const { year: y, month: m } = addMonths(year, month, delta);
-      const key = formatMonthKey(y, m);
-      out.push({
-        key,
-        label: format(new Date(y, m - 1, 1), "MMMM yyyy"),
-      });
-    }
-    return out;
-  }, [year, month]);
-
   const grossRemainder = expenseSummary.net;
   const remainderAfterFixed = expenseSummary.remainingIncomeAfterFixedSavings;
   const deltaRemainderAfterFixed = remainderAfterFixed - previousMonthRemainderAfterFixed;
@@ -160,26 +140,13 @@ export function DashboardView({
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Month</span>
-          <Select
-            value={monthKey}
-            onValueChange={(key) => {
-              router.push(`/?month=${key}`, { scroll: false });
-            }}
-          >
-            <SelectTrigger className="w-[200px]" aria-label="Select month">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNavOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthNavPicker
+          monthKey={monthKey}
+          year={year}
+          month={month}
+          ariaLabel="Select month"
+          onMonthChange={(key) => router.push(`/?month=${key}`, { scroll: false })}
+        />
       </header>
 
       <section className="grid gap-4 md:grid-cols-12" aria-labelledby="dash-net-heading">

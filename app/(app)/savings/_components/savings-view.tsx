@@ -2,13 +2,11 @@
 
 import { format } from "date-fns";
 import { PiggyBank, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { MonthNavPicker } from "@/components/month-nav-picker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatMoney, formatPercent } from "@/lib/money";
-import { addMonths, formatMonthKey } from "@/lib/month";
 import type { GlobalSavings, MonthlySavings, SavingsPoint } from "@/lib/savings/types";
 import { cn } from "@/lib/utils";
 
@@ -48,18 +46,6 @@ export function SavingsView({
   trend,
 }: SavingsViewProps) {
   const router = useRouter();
-  const monthNavOptions = useMemo(() => {
-    const out: { key: string; label: string }[] = [];
-    for (let delta = -12; delta <= 12; delta++) {
-      const { year: y, month: m } = addMonths(year, month, delta);
-      const key = formatMonthKey(y, m);
-      out.push({
-        key,
-        label: format(new Date(y, m - 1, 1), "MMMM yyyy"),
-      });
-    }
-    return out;
-  }, [year, month]);
 
   const monthDeltaAfterFixed =
     monthly.savedFromIncomeAfterFixedSavings - previousMonthSavedFromIncomeAfterFixedSavings;
@@ -97,24 +83,13 @@ export function SavingsView({
             <strong className="font-medium text-foreground">One-off moves</strong> sweep the category without recurring.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Month</span>
-          <Select
-            value={monthKey}
-            onValueChange={(key) => router.push(`/savings?month=${key}`, { scroll: false })}
-          >
-            <SelectTrigger className="w-[200px]" aria-label="Select month">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNavOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthNavPicker
+          monthKey={monthKey}
+          year={year}
+          month={month}
+          ariaLabel="Select month"
+          onMonthChange={(key) => router.push(`/savings?month=${key}`, { scroll: false })}
+        />
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-labelledby="savings-month-kpis">

@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 /** Parse `YYYY-MM` or return current calendar month. */
 export function parseMonthParam(month: string | undefined | null): {
   year: number;
@@ -36,4 +38,31 @@ export function formatMonthKey(year: number, month: number): string {
 export function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
   const d = new Date(year, month - 1 + delta, 1);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
+}
+
+export type MonthNavYearGroup = {
+  year: number;
+  months: { key: string; label: string }[];
+};
+
+/** Inclusive ±12 months from anchor, grouped ascending by calendar year then month. */
+export function buildMonthNavYearGroups(anchorYear: number, anchorMonth: number): MonthNavYearGroup[] {
+  const byYear = new Map<number, { key: string; monthNum: number; label: string }[]>();
+
+  for (let delta = -12; delta <= 12; delta++) {
+    const { year: y, month: m } = addMonths(anchorYear, anchorMonth, delta);
+    const key = formatMonthKey(y, m);
+    const label = format(new Date(y, m - 1, 1), "MMMM");
+    const bucket = byYear.get(y);
+    const entry = { key, monthNum: m, label };
+    if (bucket) bucket.push(entry);
+    else byYear.set(y, [entry]);
+  }
+
+  return [...byYear.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([yr, ms]) => ({
+      year: yr,
+      months: ms.sort((x, z) => x.monthNum - z.monthNum).map(({ key: k, label: lbl }) => ({ key: k, label: lbl })),
+    }));
 }
