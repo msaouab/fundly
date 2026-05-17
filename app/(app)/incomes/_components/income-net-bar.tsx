@@ -7,13 +7,13 @@ type IncomeNetBarProps = {
 };
 
 export function IncomeNetBar({ summary, currency }: IncomeNetBarProps) {
-  const { total, totalExpenses, net } = summary;
+  const { total, totalExpenses, savings } = summary;
   const max = Math.max(total, totalExpenses, 1);
   const incomeW = (total / max) * 100;
   const expenseW = (totalExpenses / max) * 100;
 
-  const surplus = net >= 0;
-  const label = surplus ? "surplus" : "deficit";
+  const surplus = savings >= 0;
+  const label = surplus ? "saved" : "overspent";
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -29,18 +29,18 @@ export function IncomeNetBar({ summary, currency }: IncomeNetBarProps) {
         />
       </div>
       <p className="text-sm text-muted-foreground">
-        Net this month:{" "}
+        Saved in period:{" "}
         <span
           className={
             surplus
               ? "font-semibold text-emerald-600 dark:text-emerald-400"
-              : net === 0
+              : savings === 0
                 ? "font-semibold text-foreground"
                 : "font-semibold text-red-600 dark:text-red-400"
           }
         >
-          {net >= 0 ? "+" : "−"}
-          {formatMoney(Math.abs(net), currency)} {label}
+          {savings >= 0 ? "+" : "−"}
+          {formatMoney(Math.abs(savings), currency)} {label}
         </span>
       </p>
     </div>

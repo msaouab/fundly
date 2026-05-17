@@ -3,9 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { GlobalPeriodPicker, usePeriodNavQuery } from "@/components/global-period-picker";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -13,8 +13,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SidebarUserProfile } from "@/components/sidebar-user-profile";
+import { UserProfileMenu } from "@/components/user-profile-menu";
 import { appNavItems } from "@/lib/nav";
+import { isPeriodAwareRoute } from "@/lib/period-routes";
+import { hrefWithPeriod } from "@/lib/period-url";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "fundly-sidebar-collapsed";
@@ -42,9 +44,77 @@ const mobileItemClass = (active: boolean) =>
       : "text-zinc-600 dark:text-zinc-400",
   ].join(" ");
 
+function MobileNavItem({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+}: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  pathname: string;
+}) {
+  const periodQuery = usePeriodNavQuery();
+  const active =
+    pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+  const resolvedHref = useMemo(() => {
+    if (!isPeriodAwareRoute(href)) return href;
+    return hrefWithPeriod(href, periodQuery);
+  }, [href, periodQuery]);
+
+  return (
+    <Link
+      href={resolvedHref}
+      className={mobileItemClass(active)}
+      aria-current={active ? "page" : undefined}
+    >
+      <Icon className="size-6 shrink-0" aria-hidden />
+      <span className="max-w-18 truncate">{label}</span>
+    </Link>
+  );
+}
+
+function NavItemLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+  collapsed,
+}: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  const periodQuery = usePeriodNavQuery();
+  const resolvedHref = useMemo(() => {
+    if (!isPeriodAwareRoute(href)) return href;
+    return hrefWithPeriod(href, periodQuery);
+  }, [href, periodQuery]);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href={resolvedHref}
+          className={navItemClass(active, collapsed)}
+          aria-current={active ? "page" : undefined}
+        >
+          <Icon className="size-5 shrink-0 opacity-80" aria-hidden />
+          <span className={collapsed ? "sr-only" : ""}>{label}</span>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const showPeriodPicker = isPeriodAwareRoute(pathname);
 
   useEffect(() => {
     try {
@@ -149,46 +219,18 @@ export function AppShell({ children, user }: AppShellProps) {
                 pathname === href ||
                 (href !== "/" && pathname.startsWith(`${href}/`));
               return (
-                <Tooltip key={href}>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={href}
-                      className={navItemClass(active, sidebarCollapsed)}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <Icon className="size-5 shrink-0 opacity-80" aria-hidden />
-                      <span className={sidebarCollapsed ? "sr-only" : ""}>{label}</span>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent>{label}</TooltipContent>
-                </Tooltip>
+                <NavItemLink
+                  key={href}
+                  href={href}
+                  label={label}
+                  icon={Icon}
+                  active={active}
+                  collapsed={sidebarCollapsed}
+                />
               );
             })}
           </div>
         </nav>
-        <div className="mt-auto shrink-0 border-t border-zinc-200 p-3 dark:border-zinc-800">
-          <SidebarUserProfile
-            name={user.name}
-            email={user.email}
-            collapsed={sidebarCollapsed}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className={cn(
-                  "mt-3 flex w-full items-center gap-3 rounded-lg py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                  sidebarCollapsed ? "justify-center px-2" : "px-3",
-                )}
-              >
-                <LogOut className="size-5 shrink-0 opacity-80" aria-hidden />
-                <span className={sidebarCollapsed ? "sr-only" : ""}>Sign out</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Sign out</TooltipContent>
-          </Tooltip>
-        </div>
       </aside>
 
       <div
@@ -197,17 +239,16 @@ export function AppShell({ children, user }: AppShellProps) {
           sidebarCollapsed ? "md:pl-16" : "md:pl-56",
         )}
       >
-        <div className="flex items-center justify-end px-4 pt-3 md:hidden">
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
-            aria-label="Sign out"
-            title="Sign out"
-            className="inline-flex size-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden />
-          </button>
-        </div>
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3 md:px-8 dark:border-zinc-800">
+          <div className="flex min-w-0 flex-1 justify-start md:justify-end">
+            {showPeriodPicker ? (
+              <Suspense fallback={null}>
+                <GlobalPeriodPicker />
+              </Suspense>
+            ) : null}
+          </div>
+          <UserProfileMenu name={user.name} email={user.email} className="shrink-0" />
+        </header>
         <main className="flex-1 px-4 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0))] md:px-8 md:py-8 md:pb-8">
           {children}
         </main>
@@ -217,22 +258,9 @@ export function AppShell({ children, user }: AppShellProps) {
         className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom,0px)] pt-1 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.08)] backdrop-blur-md md:hidden dark:border-zinc-800 dark:bg-zinc-900/95"
         aria-label="Mobile main"
       >
-        {appNavItems.map(({ href, label, icon: Icon }) => {
-          const active =
-            pathname === href ||
-            (href !== "/" && pathname.startsWith(`${href}/`));
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={mobileItemClass(active)}
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon className="size-6 shrink-0" aria-hidden />
-              <span className="max-w-18 truncate">{label}</span>
-            </Link>
-          );
-        })}
+        {appNavItems.map((item) => (
+          <MobileNavItem key={item.href} {...item} pathname={pathname} />
+        ))}
       </nav>
       </div>
     </TooltipProvider>

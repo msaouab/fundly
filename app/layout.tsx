@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s · Fundly",
   },
   description:
-    "Track income and expenses, monitor monthly budget health, and run credit and loan simulations before you commit.",
+    "Track income and expenses, monitor monthly budget health, and plan savings goals and calendar events.",
   manifest: "/manifest.webmanifest",
   applicationName: "Fundly",
   appleWebApp: {

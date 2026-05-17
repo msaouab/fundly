@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { monthRangeLocal } from "@/lib/month";
+import { computeCashflow } from "@/lib/cashflow";
+import type { PeriodRange } from "@/lib/period";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
 import type { IncomeType } from "@/generated/prisma/enums";
 
@@ -21,24 +22,23 @@ const incomeSelect = {
 
 export async function fetchIncomesPageData(
   userId: string,
-  year: number,
-  month: number,
+  range: PeriodRange,
 ): Promise<{
   incomes: IncomeWithMeta[];
   sources: IncomeSource[];
   summary: MonthSummary;
   currency: string;
 }> {
-  const { start, end } = monthRangeLocal(year, month);
+  const dateFilter = { date: { gte: range.start, lte: range.end } };
 
   const [incomeRows, expenseAgg] = await Promise.all([
     prisma.income.findMany({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, ...dateFilter },
       select: incomeSelect,
       orderBy: { date: "desc" },
     }),
     prisma.expense.aggregate({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, ...dateFilter },
       _sum: { amount: true },
     }),
   ]);
@@ -53,7 +53,7 @@ export async function fetchIncomesPageData(
   }
   const variable = Math.max(0, total - recurring);
   const totalExpenses = Number(expenseAgg._sum.amount ?? 0);
-  const net = total - totalExpenses;
+  const { savings } = computeCashflow(total, totalExpenses);
 
   const incomes: IncomeWithMeta[] = incomeRows.map((r) => {
     const amount = Number(r.amount);
@@ -104,7 +104,7 @@ export async function fetchIncomesPageData(
     recurring,
     variable,
     totalExpenses,
-    net,
+    savings,
   };
 
   return { incomes, sources, summary, currency };

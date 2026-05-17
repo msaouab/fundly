@@ -1,0 +1,2 @@
+export const CHART_HEIGHT_DEFAULT = 280;
+export const CHART_HEIGHT_SAVINGS = 320;

@@ -1,9 +1,8 @@
 import {
-  Calculator,
+  CalendarDays,
   LayoutDashboard,
   PiggyBank,
   Receipt,
-  Settings,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -20,6 +19,5 @@ export const appNavItems: AppNavItem[] = [
   { href: "/incomes", label: "Incomes", icon: Wallet },
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/savings", label: "Savings", icon: PiggyBank },
-  { href: "/simulations", label: "Simulations", icon: Calculator },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];

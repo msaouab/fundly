@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "../types";
 import type { ExpenseCategory } from "@/generated/prisma/enums";
-import { MonthNavPicker } from "@/components/month-nav-picker";
+import type { SerializedPeriod } from "@/lib/period";
 import { DuplicateExpenseBanner } from "./duplicate-modal";
 import { ExpenseCategoryBar } from "./expense-category-bar";
 import { ExpenseForm } from "./expense-form";
@@ -14,9 +13,7 @@ import { NetBar } from "./net-bar";
 
 type ExpensesViewProps = {
   userId: string;
-  monthKey: string;
-  year: number;
-  month: number;
+  period: SerializedPeriod;
   expenses: ExpenseWithMeta[];
   summary: ExpenseMonthSummary;
   currency: string;
@@ -47,14 +44,12 @@ function buildBreakdownFromRows(rows: ExpenseWithMeta[]): CategoryBreakdown[] {
 
 export function ExpensesView({
   userId,
-  monthKey,
-  year,
-  month,
+  period,
   expenses,
   summary,
   currency,
 }: ExpensesViewProps) {
-  const router = useRouter();
+  const monthKey = period.to.slice(0, 7);
   const amountRef = useRef<HTMLInputElement | null>(null);
   const [pendingExpenses, setPendingExpenses] = useState<ExpenseWithMeta[]>([]);
 
@@ -83,50 +78,24 @@ export function ExpensesView({
     let extraTotal = 0;
     let extraFixed = 0;
     let extraVariable = 0;
-    let extraSavingsContribution = 0;
-    let extraRecurringTransfer = 0;
-    let extraOneOffTransfer = 0;
     for (const p of pendingExpenses) {
       extraTotal += p.amount;
       if (p.kind === "FIXED") extraFixed += p.amount;
       else extraVariable += p.amount;
-      if (p.category === "SAVINGS_CONTRIBUTION") {
-        extraSavingsContribution += p.amount;
-        if (p.isRecurring) extraRecurringTransfer += p.amount;
-        else extraOneOffTransfer += p.amount;
-      }
     }
     const total = summary.total + extraTotal;
     const fixed = summary.fixed + extraFixed;
     const variable = summary.variable + extraVariable;
-    const savingsContribution = summary.savingsContribution + extraSavingsContribution;
-    const recurringSavingsTransfer =
-      summary.recurringSavingsTransfer + extraRecurringTransfer;
-    const oneOffSavingsTransfer = summary.oneOffSavingsTransfer + extraOneOffTransfer;
     const totalIncome = summary.totalIncome;
-    const spendExcludingSavingsTransfers = total - savingsContribution;
-    const net = totalIncome - spendExcludingSavingsTransfers;
-    const remainingIncome = net;
-    const remainingIncomeAfterFixedSavings = remainingIncome - recurringSavingsTransfer;
-    const cashAfterAllExpenses = totalIncome - total;
-    const savingsRate = totalIncome > 0 ? (remainingIncome / totalIncome) * 100 : 0;
-    const discretionaryRateAfterFixed =
-      totalIncome > 0 ? (remainingIncomeAfterFixedSavings / totalIncome) * 100 : 0;
+    const savings = totalIncome - total;
+    const savingsRate = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
     return {
       total,
       fixed,
       variable,
-      savingsContribution,
-      recurringSavingsTransfer,
-      oneOffSavingsTransfer,
       totalIncome,
-      net,
-      spendExcludingSavingsTransfers,
-      remainingIncome,
-      remainingIncomeAfterFixedSavings,
-      cashAfterAllExpenses,
+      savings,
       savingsRate,
-      discretionaryRateAfterFixed,
     };
   }, [pendingExpenses, summary]);
 
@@ -148,21 +117,11 @@ export function ExpensesView({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Expenses</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track fixed and variable spending, compare to income, and plan the month ahead.
-          </p>
-        </div>
-        <MonthNavPicker
-          monthKey={monthKey}
-          year={year}
-          month={month}
-          monthSelectName="expenseMonth"
-          triggerClassName="dark:border-zinc-700"
-          onMonthChange={(key) => router.push(`/expenses?month=${key}`, { scroll: false })}
-        />
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Expenses</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Track fixed and variable spending, compare to income, and plan the month ahead.
+        </p>
       </header>
 
       <ExpenseSummary summary={adjustedSummary} currency={currency} />

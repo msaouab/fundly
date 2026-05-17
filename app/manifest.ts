@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Fundly",
     short_name: "Fundly",
     description:
-      "Track income and expenses, monitor monthly budget health, and run credit and loan simulations before you commit.",
+      "Track income and expenses, monitor monthly budget health, and plan savings goals and calendar events.",
     start_url: "/",
     display: "standalone",
     background_color: "#0a0a0a",

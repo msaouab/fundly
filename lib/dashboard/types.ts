@@ -3,22 +3,9 @@ import type {
   ExpenseMonthSummary,
 } from "@/app/(app)/expenses/types";
 import type { IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
+import type { MonthlyCashFlowPoint } from "@/lib/charts/types";
 
-export type MonthlyFlowPoint = {
-  monthKey: string;
-  /** Short label for chart axis */
-  label: string;
-  income: number;
-  expense: number;
-  /** Income minus spending excluding savings-category rows (implicit “remainder” room). */
-  savedFromIncome: number;
-  /** Same value as savedFromIncome; kept for wording parity with KPIs. */
-  net: number;
-  /** Gross remainder − planned recurring savings transfers (discretionary room). */
-  remainderAfterFixedSavings: number;
-  recurringSavingsTransfers: number;
-  oneOffSavingsTransfers: number;
-};
+export type { MonthlyCashFlowPoint as MonthlyFlowPoint };
 
 export type DashboardHighlight = {
   label: string;
@@ -27,14 +14,12 @@ export type DashboardHighlight = {
 
 export type DashboardData = {
   currency: string;
+  periodLabel: string;
   incomeSummary: MonthSummary;
   expenseSummary: ExpenseMonthSummary;
   categoryBreakdown: CategoryBreakdown[];
   incomeSources: IncomeSource[];
-  flowSeries: MonthlyFlowPoint[];
-  /** Gross remainder (income − spend excl. transfers) for the month before the selected month. */
-  previousMonthNet: number;
-  /** Remainder after planned recurring transfers for the month before the selected month. */
-  previousMonthRemainderAfterFixed: number;
+  flowSeries: MonthlyCashFlowPoint[];
+  previousPeriodSavings: number;
   largestExpense: DashboardHighlight;
 };

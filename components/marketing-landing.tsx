@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  Calculator,
+  CalendarDays,
   Coins,
   LineChart,
   PiggyBank,
@@ -26,10 +26,10 @@ const features = [
       "Set targets with monthly contributions—and watch progress update as life changes.",
   },
   {
-    icon: Calculator,
-    title: "Simulations before you commit",
+    icon: CalendarDays,
+    title: "Calendar & planned events",
     description:
-      "Model loans, debt strategies, savings timelines, and what-if scenarios side by side.",
+      "Map holidays, trips, and milestones—and see whether budgets stay on track before they happen.",
   },
   {
     icon: LineChart,
@@ -104,7 +104,7 @@ export function MarketingLanding() {
                 See your cash flow—and plan bigger moves—with confidence.
               </h1>
               <p className="mx-auto max-w-xl text-pretty text-base leading-relaxed text-muted-foreground lg:mx-0 sm:text-lg">
-                Fundly brings monthly income and spending, savings goals, and interactive simulations
+                Fundly brings monthly income and spending, savings goals, and event planning
                 into one calm workspace—so saving for a car, a home, or a buffer feels less guesswork.
               </p>
             </div>
@@ -209,7 +209,7 @@ export function MarketingLanding() {
             Ready to sketch your next milestone?
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-pretty text-sm text-muted-foreground sm:text-base">
-            Open an account in a minute—then tailor goals and simulations around how you actually live.
+            Open an account in a minute—then tailor goals and calendar plans around how you actually live.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href="/register" className={buttonVariants({ size: "lg" })}>

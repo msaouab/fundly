@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { parseMonthParam } from "@/lib/month";
+import { resolveAppPeriod } from "@/lib/period-storage.server";
 import { SavingsSkeleton } from "./_components";
 import { SavingsPageContent } from "./savings-content";
 
@@ -9,16 +9,16 @@ export const metadata: Metadata = {
 };
 
 type PageProps = {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; period?: string; from?: string; to?: string }>;
 };
 
 export default async function SavingsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const { year, month } = parseMonthParam(sp.month);
+  const period = await resolveAppPeriod(sp);
 
   return (
     <Suspense fallback={<SavingsSkeleton />}>
-      <SavingsPageContent year={year} month={month} />
+      <SavingsPageContent period={period} />
     </Suspense>
   );
 }

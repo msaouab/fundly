@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { parseMonthParam } from "@/lib/month";
+import { resolveAppPeriod } from "@/lib/period-storage.server";
 import { ExpenseSkeleton } from "./_components/expense-skeleton";
 import { ExpensesPageContent } from "./expenses-content";
 
@@ -9,16 +9,16 @@ export const metadata: Metadata = {
 };
 
 type PageProps = {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; period?: string; from?: string; to?: string }>;
 };
 
 export default async function ExpensesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const { year, month } = parseMonthParam(sp.month);
+  const period = await resolveAppPeriod(sp);
 
   return (
     <Suspense fallback={<ExpenseSkeleton />}>
-      <ExpensesPageContent year={year} month={month} />
+      <ExpensesPageContent period={period} />
     </Suspense>
   );
 }

@@ -1,79 +1,54 @@
-import { format } from "date-fns";
 import { fetchExpensesPageData } from "@/lib/expenses/queries";
 import { fetchIncomesPageData } from "@/lib/incomes/queries";
+import { computeCashflow } from "@/lib/cashflow";
 import { prisma } from "@/lib/prisma";
-import { addMonths, formatMonthKey, monthRangeLocal } from "@/lib/month";
+import { monthRangeLocal } from "@/lib/month";
+import {
+  listMonthBucketsInRange,
+  previousPeriod,
+  type DatePeriod,
+} from "@/lib/period";
 import type { DashboardData, MonthlyFlowPoint } from "./types";
 
-async function fetchMonthlyFlowSeries(
+async function fetchFlowSeriesForRange(
   userId: string,
-  endYear: number,
-  endMonth: number,
-  length: number,
+  start: Date,
+  end: Date,
 ): Promise<MonthlyFlowPoint[]> {
-  const deltas = Array.from({ length }, (_, i) => i - (length - 1));
+  const buckets = listMonthBucketsInRange(start, end, 24);
   return Promise.all(
-    deltas.map(async (delta) => {
-      const { year: y, month: m } = addMonths(endYear, endMonth, delta);
-      const { start, end } = monthRangeLocal(y, m);
-      const [incomeAgg, expenseAgg, recSav, onceSav] = await Promise.all([
+    buckets.map(async (b) => {
+      const { start: ms, end: me } = monthRangeLocal(b.year, b.month);
+      const [incomeAgg, expenseAgg] = await Promise.all([
         prisma.income.aggregate({
-          where: { userId, date: { gte: start, lte: end } },
+          where: { userId, date: { gte: ms, lte: me } },
           _sum: { amount: true },
         }),
         prisma.expense.aggregate({
-          where: { userId, date: { gte: start, lte: end } },
-          _sum: { amount: true },
-        }),
-        prisma.expense.aggregate({
-          where: {
-            userId,
-            date: { gte: start, lte: end },
-            category: "SAVINGS_CONTRIBUTION",
-            isRecurring: true,
-          },
-          _sum: { amount: true },
-        }),
-        prisma.expense.aggregate({
-          where: {
-            userId,
-            date: { gte: start, lte: end },
-            category: "SAVINGS_CONTRIBUTION",
-            isRecurring: false,
-          },
+          where: { userId, date: { gte: ms, lte: me } },
           _sum: { amount: true },
         }),
       ]);
       const income = Number(incomeAgg._sum.amount ?? 0);
       const expense = Number(expenseAgg._sum.amount ?? 0);
-      const recurringSavingsTransfers = Number(recSav._sum.amount ?? 0);
-      const oneOffSavingsTransfers = Number(onceSav._sum.amount ?? 0);
-      const savingsContribution = recurringSavingsTransfers + oneOffSavingsTransfers;
-      const savedFromIncome = income - expense + savingsContribution;
-      const remainderAfterFixedSavings = savedFromIncome - recurringSavingsTransfers;
+      const { savings } = computeCashflow(income, expense);
       return {
-        monthKey: formatMonthKey(y, m),
-        label: format(new Date(y, m - 1, 1), "MMM"),
+        monthKey: b.monthKey,
+        label: b.label,
         income,
         expense,
-        savedFromIncome,
-        net: savedFromIncome,
-        remainderAfterFixedSavings,
-        recurringSavingsTransfers,
-        oneOffSavingsTransfers,
+        savings,
       };
     }),
   );
 }
 
-async function fetchPreviousMonthCashFlowTotals(
+async function fetchPeriodSavings(
   userId: string,
-  year: number,
-  month: number,
-): Promise<{ grossRemainder: number; remainderAfterFixed: number }> {
-  const { year: py, month: pm } = addMonths(year, month, -1);
-  const { start, end } = monthRangeLocal(py, pm);
-  const [incomeAgg, expenseAgg, recSav, onceSav] = await Promise.all([
+  start: Date,
+  end: Date,
+): Promise<number> {
+  const [incomeAgg, expenseAgg] = await Promise.all([
     prisma.income.aggregate({
       where: { userId, date: { gte: start, lte: end } },
       _sum: { amount: true },
@@ -82,33 +57,10 @@ async function fetchPreviousMonthCashFlowTotals(
       where: { userId, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
-    prisma.expense.aggregate({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-        category: "SAVINGS_CONTRIBUTION",
-        isRecurring: true,
-      },
-      _sum: { amount: true },
-    }),
-    prisma.expense.aggregate({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-        category: "SAVINGS_CONTRIBUTION",
-        isRecurring: false,
-      },
-      _sum: { amount: true },
-    }),
   ]);
   const income = Number(incomeAgg._sum.amount ?? 0);
   const expense = Number(expenseAgg._sum.amount ?? 0);
-  const savingsContribution =
-    Number(recSav._sum.amount ?? 0) + Number(onceSav._sum.amount ?? 0);
-  const recurringSavingsTransfers = Number(recSav._sum.amount ?? 0);
-  const grossRemainder = income - expense + savingsContribution;
-  const remainderAfterFixed = grossRemainder - recurringSavingsTransfers;
-  return { grossRemainder, remainderAfterFixed };
+  return computeCashflow(income, expense).savings;
 }
 
 function pickLargestExpense(
@@ -127,12 +79,18 @@ function pickLargestExpense(
   return { label, amount: best.amount };
 }
 
-export async function fetchDashboardData(userId: string, year: number, month: number): Promise<DashboardData> {
-  const [incomePage, expensePage, flowSeries, previousMonthTotals] = await Promise.all([
-    fetchIncomesPageData(userId, year, month),
-    fetchExpensesPageData(userId, year, month),
-    fetchMonthlyFlowSeries(userId, year, month, 6),
-    fetchPreviousMonthCashFlowTotals(userId, year, month),
+export async function fetchDashboardData(
+  userId: string,
+  period: DatePeriod,
+): Promise<DashboardData> {
+  const range = { start: period.start, end: period.end };
+  const prev = previousPeriod(period);
+
+  const [incomePage, expensePage, flowSeries, previousPeriodSavings] = await Promise.all([
+    fetchIncomesPageData(userId, range),
+    fetchExpensesPageData(userId, range),
+    fetchFlowSeriesForRange(userId, period.start, period.end),
+    fetchPeriodSavings(userId, prev.start, prev.end),
   ]);
 
   const currency = incomePage.currency || expensePage.currency || "MAD";
@@ -140,21 +98,19 @@ export async function fetchDashboardData(userId: string, year: number, month: nu
 
   return {
     currency,
+    periodLabel: period.label,
     incomeSummary: incomePage.summary,
     expenseSummary: expensePage.summary,
     categoryBreakdown: expensePage.breakdown,
     incomeSources: sourcesSorted,
     flowSeries,
-    previousMonthNet: previousMonthTotals.grossRemainder,
-    previousMonthRemainderAfterFixed: previousMonthTotals.remainderAfterFixed,
+    previousPeriodSavings,
     largestExpense: pickLargestExpense(
-      expensePage.expenses
-        .filter((e) => e.category !== "SAVINGS_CONTRIBUTION")
-        .map((e) => ({
-          description: e.description,
-          payee: e.payee,
-          amount: e.amount,
-        })),
+      expensePage.expenses.map((e) => ({
+        description: e.description,
+        payee: e.payee,
+        amount: e.amount,
+      })),
     ),
   };
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
 import {
   ArrowRight,
   Landmark,
@@ -11,28 +10,17 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo } from "react";
-import { MonthNavPicker } from "@/components/month-nav-picker";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  Cell,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CategoryPieChart, MonthlyFlowBarChart } from "@/components/charts";
+import type { SerializedPeriod } from "@/lib/period";
 import type {
   CategoryBreakdown,
   ExpenseMonthSummary,
 } from "@/app/(app)/expenses/types";
 import type { IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { categoryBreakdownToSlices } from "@/lib/charts/adapters/category-breakdown";
+import { CHART_HEIGHT_DEFAULT } from "@/lib/charts/constants";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -40,217 +28,121 @@ import type { DashboardHighlight, MonthlyFlowPoint } from "@/lib/dashboard/types
 
 type DashboardViewProps = {
   email: string | null;
-  monthKey: string;
-  year: number;
-  month: number;
+  period: SerializedPeriod;
+  periodLabel: string;
   currency: string;
   incomeSummary: MonthSummary;
   expenseSummary: ExpenseMonthSummary;
   categoryBreakdown: CategoryBreakdown[];
   incomeSources: IncomeSource[];
   flowSeries: MonthlyFlowPoint[];
-  previousMonthNet: number;
-  previousMonthRemainderAfterFixed: number;
+  previousPeriodSavings: number;
   largestExpense: DashboardHighlight;
 };
 
-/** Recharts measures the parent; % height + grid often yields -1 until layout settles. */
-const DASHBOARD_CHART_HEIGHT = 280;
-
-const PIE_COLORS = [
-  "#0f766e",
-  "#0d9488",
-  "#14b8a6",
-  "#0891b2",
-  "#0369a1",
-  "#4f46e5",
-  "#7c3aed",
-  "#a855f7",
-  "#db2777",
-  "#ea580c",
-  "#ca8a04",
-  "#52525c",
-];
-
-function compactAxis(amount: number, currency: string): string {
-  const abs = Math.abs(amount);
-  if (abs >= 1000)
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(amount);
-  return formatMoney(amount, currency);
-}
-
 export function DashboardView({
   email,
-  monthKey,
-  year,
-  month,
+  period,
+  periodLabel,
   currency,
   incomeSummary,
   expenseSummary,
   categoryBreakdown,
   incomeSources,
   flowSeries,
-  previousMonthNet,
-  previousMonthRemainderAfterFixed,
+  previousPeriodSavings,
   largestExpense,
 }: DashboardViewProps) {
-  const router = useRouter();
+  const periodQuery =
+    period.preset !== "custom" ? `period=${period.preset}` : `from=${period.from}&to=${period.to}`;
 
-  const grossRemainder = expenseSummary.net;
-  const remainderAfterFixed = expenseSummary.remainingIncomeAfterFixedSavings;
-  const deltaRemainderAfterFixed = remainderAfterFixed - previousMonthRemainderAfterFixed;
-  const deltaGrossRemainder = grossRemainder - previousMonthNet;
-  const remainderPositive = remainderAfterFixed >= 0;
+  const savings = expenseSummary.savings;
+  const deltaSavings = savings - previousPeriodSavings;
+  const savingsPositive = savings >= 0;
   const recurringIncomeShare =
     incomeSummary.total > 0 ? (incomeSummary.recurring / incomeSummary.total) * 100 : 0;
 
   const topCategory = categoryBreakdown.find((c) => c.total > 0);
   const topSource = incomeSources[0];
 
-  const pieSlices = useMemo(() => {
-    const rows = categoryBreakdown.filter((b) => b.total > 0);
-    return rows.map((b, i) => ({
-      key: b.category,
-      name: CATEGORY_CONFIG[b.category].label,
-      value: b.total,
-      fill: PIE_COLORS[i % PIE_COLORS.length]!,
-    }));
-  }, [categoryBreakdown]);
+  const categoryChart = useMemo(
+    () => categoryBreakdownToSlices(categoryBreakdown),
+    [categoryBreakdown],
+  );
 
   const fixedPct =
     expenseSummary.total > 0 ? (expenseSummary.fixed / expenseSummary.total) * 100 : 0;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-10">
-      <header className="flex flex-col gap-4 px-1 sm:flex-row sm:items-start sm:justify-between md:px-0">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {email ? (
-              <>Signed in as {email}</>
-            ) : (
-              <>Overview for the month</>
-            )}
-          </p>
-        </div>
-        <MonthNavPicker
-          monthKey={monthKey}
-          year={year}
-          month={month}
-          ariaLabel="Select month"
-          onMonthChange={(key) => router.push(`/?month=${key}`, { scroll: false })}
-        />
+      <header className="px-1 md:px-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {email ? (
+            <>Signed in as {email}</>
+          ) : (
+            <>Income, expenses, and savings for {periodLabel}</>
+          )}
+        </p>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-12" aria-labelledby="dash-net-heading">
+      <section className="grid gap-4 md:grid-cols-12" aria-labelledby="dash-savings-heading">
         <Card className="border-border md:col-span-7 lg:col-span-8 dark:border-zinc-800">
           <CardHeader className="pb-2">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <CardTitle id="dash-net-heading" className="text-base font-semibold">
-                Remaining income (after fixed savings)
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">
-                Gross remainder minus planned recurring savings transfers
-              </span>
-            </div>
-            <CardDescription className="sr-only">
-              Discretionary remainder for this month after reserving planned recurring savings-category
-              transfers; gross remainder is income minus spending excluding all savings transfers.
+            <CardTitle id="dash-savings-heading" className="text-base font-semibold">
+              Saved in period
+            </CardTitle>
+            <CardDescription>
+              Total income minus total expenses — each entry counts on its recorded date.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <p
               className={cn(
                 "text-4xl font-semibold tabular-nums tracking-tight",
-                remainderPositive ? "text-primary" : "text-destructive",
+                savingsPositive ? "text-primary" : "text-destructive",
               )}
             >
-              {formatMoney(remainderAfterFixed, currency)}
+              {formatMoney(savings, currency)}
             </p>
             <p className="text-xs text-muted-foreground">
-              Gross remainder (before reserving planned saves):{" "}
-              <span className="font-medium tabular-nums text-foreground">{formatMoney(grossRemainder, currency)}</span>
-              {' — '}same headline as Savings &quot;remainder room&quot; KPI.
-            </p>
-            {expenseSummary.savingsContribution > 0 ? (
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>
-                  Planned transfers:{" "}
-                  <span className="font-medium tabular-nums text-foreground">
-                    {formatMoney(expenseSummary.recurringSavingsTransfer, currency)}
-                  </span>
-                </span>
-                <span>
-                  One-off transfers:{" "}
-                  <span className="font-medium tabular-nums text-foreground">
-                    {formatMoney(expenseSummary.oneOffSavingsTransfer, currency)}
-                  </span>
-                </span>
-              </div>
-            ) : null}
-            <p className="text-xs text-muted-foreground">
-              Cash after <em className="not-italic">all</em> tracked rows (incl. transfers):{" "}
-              <span
-                className={cn(
-                  "font-medium tabular-nums",
-                  expenseSummary.cashAfterAllExpenses >= 0 ? "text-foreground" : "text-destructive",
-                )}
-              >
-                {formatMoney(expenseSummary.cashAfterAllExpenses, currency)}
-              </span>
+              Income {formatMoney(incomeSummary.total, currency)} − expenses{" "}
+              {formatMoney(expenseSummary.total, currency)}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">vs previous month (after fixed saves):</span>
+              <span className="text-muted-foreground">vs previous period:</span>
               <span
                 className={cn(
                   "inline-flex items-center gap-1 font-medium tabular-nums",
-                  deltaRemainderAfterFixed > 0
+                  deltaSavings > 0
                     ? "text-primary"
-                    : deltaRemainderAfterFixed < 0
+                    : deltaSavings < 0
                       ? "text-destructive"
                       : "text-muted-foreground",
                 )}
               >
-                {deltaRemainderAfterFixed > 0 ? (
+                {deltaSavings > 0 ? (
                   <TrendingUp className="size-4" aria-hidden />
-                ) : deltaRemainderAfterFixed < 0 ? (
+                ) : deltaSavings < 0 ? (
                   <TrendingDown className="size-4" aria-hidden />
                 ) : null}
-                {deltaRemainderAfterFixed >= 0 ? "+" : ""}
-                {formatMoney(deltaRemainderAfterFixed, currency)}
+                {deltaSavings >= 0 ? "+" : ""}
+                {formatMoney(deltaSavings, currency)}
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Gross remainder vs prior month:{" "}
-              <span className={cn("font-medium tabular-nums", deltaGrossRemainder >= 0 ? "text-foreground" : "text-destructive")}>
-                {deltaGrossRemainder >= 0 ? "+" : ""}
-                {formatMoney(deltaGrossRemainder, currency)}
-              </span>
-            </p>
           </CardContent>
         </Card>
 
         <Card className="border-border md:col-span-5 lg:col-span-4 dark:border-zinc-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Discretionary rate</CardTitle>
+            <CardTitle className="text-base font-semibold">Savings rate</CardTitle>
             <CardDescription>
-              Remaining income after fixed planned saves, as a share of income. Gross remainder rate is
-              income − spend excl. transfers.
+              Share of income left after all expenses this month.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold tabular-nums text-primary">
-              {formatPercent(expenseSummary.discretionaryRateAfterFixed, 1)}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Gross room / income: {formatPercent(expenseSummary.savingsRate, 1)}
+              {formatPercent(expenseSummary.savingsRate, 1)}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Recurring income: {formatPercent(recurringIncomeShare, 0)} of all income this month
@@ -315,82 +207,18 @@ export function DashboardView({
         <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
           <CardHeader>
             <CardTitle id="dash-flow-chart-title" className="text-base font-semibold">
-              Income, spend, discretionary remainder, and savings moves · last 6 months
+              Income, expenses, and savings by month
             </CardTitle>
             <CardDescription>
-              Green = gross surplus minus planned recurring transfers. Planned vs one-off = expenses in
-              SAVINGS_CONTRIBUTION marked recurring or not (weekly/monthly…).
+              One bar per calendar month in {periodLabel.toLowerCase()}.
             </CardDescription>
           </CardHeader>
           <CardContent className="w-full min-w-0 pb-4 pt-0">
-            <div
-              className="w-full min-w-0 [&_.recharts-cartesian-grid_line]:stroke-border [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-legend-wrapper]:text-muted-foreground"
-              style={{ height: DASHBOARD_CHART_HEIGHT }}
-            >
-              <ResponsiveContainer width="100%" height={DASHBOARD_CHART_HEIGHT} minWidth={0} debounce={50}>
-                <BarChart data={flowSeries} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => compactAxis(Number(v), currency)}
-                    axisLine={{ stroke: "var(--border)" }}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--popover)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      color: "var(--popover-foreground)",
-                    }}
-                    itemSorter={(item) => {
-                      const order: Record<string, number> = {
-                        income: 0,
-                        expense: 1,
-                        remainderAfterFixedSavings: 2,
-                        recurringSavingsTransfers: 3,
-                        oneOffSavingsTransfers: 4,
-                      };
-                      return order[String(item.dataKey ?? "")] ?? 99;
-                    }}
-                    formatter={(value, name) => [
-                      formatMoney(Number(value ?? 0), currency),
-                      String(name ?? ""),
-                    ]}
-                    labelFormatter={(_, payload) => {
-                      const point = payload?.[0]?.payload as MonthlyFlowPoint | undefined;
-                      if (!point?.monthKey) return "";
-                      return format(new Date(`${point.monthKey}-01T12:00:00`), "MMMM yyyy");
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="income" name="Income" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                  <Bar dataKey="expense" name="Expenses" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                  <Bar
-                    dataKey="remainderAfterFixedSavings"
-                    name="Remainder (after planned saves)"
-                    fill="#059669"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={32}
-                  />
-                  <Bar
-                    dataKey="recurringSavingsTransfers"
-                    name="Planned transfers"
-                    fill="#1d4ed8"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={32}
-                  />
-                  <Bar
-                    dataKey="oneOffSavingsTransfers"
-                    name="One-off transfers"
-                    fill="#38bdf8"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={32}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <MonthlyFlowBarChart
+              data={flowSeries}
+              currency={currency}
+              height={CHART_HEIGHT_DEFAULT}
+            />
           </CardContent>
         </Card>
 
@@ -400,42 +228,15 @@ export function DashboardView({
               <PieChartIcon className="size-5 text-primary" aria-hidden />
               Spending by category
             </CardTitle>
-            <CardDescription>Share of expense total for this month.</CardDescription>
+            <CardDescription>Share of expense total for the selected period.</CardDescription>
           </CardHeader>
           <CardContent className="w-full min-w-0 pb-4 pt-0">
-            {pieSlices.length === 0 ? (
-              <p className="py-8 text-sm text-muted-foreground">No expenses yet for this month.</p>
-            ) : (
-              <div className="w-full min-w-0" style={{ height: DASHBOARD_CHART_HEIGHT }}>
-                <ResponsiveContainer width="100%" height={DASHBOARD_CHART_HEIGHT} minWidth={0} debounce={50}>
-                  <PieChart margin={{ top: 0, right: 8, bottom: 0, left: 8 }}>
-                    <Pie
-                      data={pieSlices}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={54}
-                      outerRadius={92}
-                      paddingAngle={2}
-                    >
-                      {pieSlices.map((entry) => (
-                        <Cell key={entry.key} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: "var(--popover)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                        color: "var(--popover-foreground)",
-                      }}
-                      formatter={(value) => formatMoney(Number(value ?? 0), currency)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+            <CategoryPieChart
+              slices={categoryChart.slices}
+              colors={categoryChart.colors}
+              currency={currency}
+              height={CHART_HEIGHT_DEFAULT}
+            />
           </CardContent>
         </Card>
       </section>
@@ -443,7 +244,7 @@ export function DashboardView({
       <section aria-label="Highlights and shortcuts" className="grid gap-4 md:grid-cols-2">
         <Card className="border-border dark:border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">This month · quick facts</CardTitle>
+            <CardTitle className="text-base font-semibold">{periodLabel} · quick facts</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             {topCategory ? (
@@ -456,7 +257,7 @@ export function DashboardView({
                 of expenses ({formatMoney(topCategory.total, currency)}).
               </p>
             ) : (
-              <p className="text-muted-foreground">No category spending recorded for this month.</p>
+              <p className="text-muted-foreground">No category spending in this period.</p>
             )}
             {largestExpense ? (
               <p className="text-muted-foreground">
@@ -473,7 +274,7 @@ export function DashboardView({
                 {topSource.count > 1 ? ` · ${topSource.count} entries` : ""}).
               </p>
             ) : incomeSummary.total <= 0 ? (
-              <p className="text-muted-foreground">No income logged for this month.</p>
+              <p className="text-muted-foreground">No income logged in this period.</p>
             ) : null}
           </CardContent>
         </Card>
@@ -481,18 +282,18 @@ export function DashboardView({
         <Card className="border-border dark:border-zinc-800">
           <CardHeader>
             <CardTitle className="text-base font-semibold">Manage data</CardTitle>
-            <CardDescription>Jump to detailed views for this month.</CardDescription>
+            <CardDescription>Jump to detailed views for the same period.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             <Link
-              href={`/incomes?month=${monthKey}`}
+              href={`/incomes?${periodQuery}`}
               className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted dark:border-zinc-800 dark:hover:bg-zinc-800/80"
             >
               <span>Incomes</span>
               <ArrowRight className="size-4 opacity-70" aria-hidden />
             </Link>
             <Link
-              href={`/expenses?month=${monthKey}`}
+              href={`/expenses?${periodQuery}`}
               className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted dark:border-zinc-800 dark:hover:bg-zinc-800/80"
             >
               <span>Expenses</span>

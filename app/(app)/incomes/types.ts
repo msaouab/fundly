@@ -33,5 +33,6 @@ export type MonthSummary = {
   recurring: number;
   variable: number;
   totalExpenses: number;
-  net: number;
+  /** Income minus all expenses this month. */
+  savings: number;
 };

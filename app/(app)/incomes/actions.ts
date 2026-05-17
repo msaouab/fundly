@@ -45,7 +45,6 @@ function revalidateFinancePages() {
   revalidatePath("/dashboard");
   revalidatePath("/incomes");
   revalidatePath("/expenses");
-  revalidatePath("/simulations");
 }
 
 async function requireUserId(): Promise<string> {

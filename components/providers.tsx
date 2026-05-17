@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import { HighchartsProvider } from "@/components/charts/highcharts-provider";
 import { PwaRegister } from "@/components/pwa-register";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -15,8 +16,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         enableSystem={false}
         disableTransitionOnChange
       >
-        <PwaRegister />
-        {children}
+        <HighchartsProvider>
+          <PwaRegister />
+          {children}
+        </HighchartsProvider>
         <Toaster position="top-center" richColors closeButton />
       </ThemeProvider>
     </SessionProvider>

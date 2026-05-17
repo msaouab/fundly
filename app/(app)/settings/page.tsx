@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { CountrySettingsForm } from "@/components/country-settings-form";
 import { ProfileNameForm } from "@/components/profile-name-form";
 import { prisma } from "@/lib/prisma";
 import {
@@ -21,7 +22,7 @@ export default async function SettingsPage() {
   const profile = userId
     ? await prisma.user.findUnique({
         where: { id: userId },
-        select: { name: true, email: true },
+        select: { name: true, email: true, countryCode: true, currency: true },
       })
     : null;
   const name = profile?.name?.trim() || "Account";
@@ -51,6 +52,21 @@ export default async function SettingsPage() {
             <p className="text-xs text-muted-foreground">Email</p>
             <p className="text-sm font-medium text-foreground">{email}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-base">Region & calendar</CardTitle>
+          <CardDescription>
+            Country drives public holidays on the calendar and default currency.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CountrySettingsForm
+            initialCountryCode={profile?.countryCode ?? "MA"}
+            initialCurrency={profile?.currency ?? "MAD"}
+          />
         </CardContent>
       </Card>
 

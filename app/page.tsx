@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { DashboardAuthenticatedContent } from "@/app/dashboard-auth-content";
 import { MarketingLanding } from "@/components/marketing-landing";
-import { parseMonthParam } from "@/lib/month";
+import { resolveAppPeriod } from "@/lib/period-storage.server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const session = await safeAuth();
@@ -18,12 +18,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Personal finance clarity",
     description:
-      "Track income and spending, set savings goals, and run loan and what-if simulations in one calm Fundly workspace.",
+      "Track income and spending, set savings goals, and plan events on a calendar in one calm Fundly workspace.",
   };
 }
 
 type PageProps = {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; period?: string; from?: string; to?: string }>;
 };
 
 export default async function Home({ searchParams }: PageProps) {
@@ -31,7 +31,7 @@ export default async function Home({ searchParams }: PageProps) {
 
   if (session?.user) {
     const sp = await searchParams;
-    const { year, month } = parseMonthParam(sp.month);
+    const period = await resolveAppPeriod(sp);
 
     return (
       <AppShell
@@ -40,8 +40,7 @@ export default async function Home({ searchParams }: PageProps) {
         <Suspense fallback={<DashboardSkeleton />}>
           <DashboardAuthenticatedContent
             userId={session.user.id}
-            year={year}
-            month={month}
+            period={period}
             email={session.user.email ?? null}
           />
         </Suspense>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "../types";
 import type { IncomeType } from "@/generated/prisma/enums";
 import { DuplicateIncomeBanner } from "./duplicate-modal";
@@ -10,13 +9,11 @@ import { IncomeNetBar } from "./income-net-bar";
 import { IncomeSources } from "./income-sources";
 import { IncomeSummary } from "./income-summary";
 import { IncomeTable } from "./income-table";
-import { MonthNavPicker } from "@/components/month-nav-picker";
+import type { SerializedPeriod } from "@/lib/period";
 
 type IncomesViewProps = {
   userId: string;
-  monthKey: string;
-  year: number;
-  month: number;
+  period: SerializedPeriod;
   incomes: IncomeWithMeta[];
   summary: MonthSummary;
   currency: string;
@@ -24,14 +21,12 @@ type IncomesViewProps = {
 
 export function IncomesView({
   userId,
-  monthKey,
-  year,
-  month,
+  period,
   incomes,
   summary,
   currency,
 }: IncomesViewProps) {
-  const router = useRouter();
+  const monthKey = period.to.slice(0, 7);
   const [pendingIncomes, setPendingIncomes] = useState<IncomeWithMeta[]>([]);
 
   const mergedIncomes = useMemo(() => {
@@ -84,13 +79,13 @@ export function IncomesView({
     const total = summary.total + extraTotal;
     const recurring = summary.recurring + extraRecurring;
     const variable = Math.max(0, total - recurring);
-    const net = total - summary.totalExpenses;
+    const savings = total - summary.totalExpenses;
     return {
       total,
       recurring,
       variable,
       totalExpenses: summary.totalExpenses,
-      net,
+      savings,
     };
   }, [pendingIncomes, summary]);
 
@@ -104,25 +99,14 @@ export function IncomesView({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Incomes
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track salary, freelance, passive income, and other money in for your household.
-          </p>
-        </div>
-        <MonthNavPicker
-          monthKey={monthKey}
-          year={year}
-          month={month}
-          monthSelectName="incomeMonth"
-          onMonthChange={(key) => router.push(`/incomes?month=${key}`, { scroll: false })}
-        />
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Incomes</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Track salary, freelance, passive income, and other money in for your household.
+        </p>
       </header>
 
-      <IncomeSummary summary={adjustedSummary} currency={currency} />
+      <IncomeSummary summary={adjustedSummary} currency={currency} period={period} />
       <IncomeNetBar summary={adjustedSummary} currency={currency} />
 
       <DuplicateIncomeBanner

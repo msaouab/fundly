@@ -1,6 +1,7 @@
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "@/app/(app)/expenses/types";
+import { computeCashflow } from "@/lib/cashflow";
 import { prisma } from "@/lib/prisma";
-import { monthRangeLocal } from "@/lib/month";
+import type { PeriodRange } from "@/lib/period";
 import type { ExpenseCategory, ExpenseKind } from "@/generated/prisma/enums";
 
 const expenseSelect = {
@@ -22,24 +23,23 @@ const expenseSelect = {
 
 export async function fetchExpensesPageData(
   userId: string,
-  year: number,
-  month: number,
+  range: PeriodRange,
 ): Promise<{
   expenses: ExpenseWithMeta[];
   breakdown: CategoryBreakdown[];
   summary: ExpenseMonthSummary;
   currency: string;
 }> {
-  const { start, end } = monthRangeLocal(year, month);
+  const dateFilter = { date: { gte: range.start, lte: range.end } };
 
   const [expenseRows, incomeAgg] = await Promise.all([
     prisma.expense.findMany({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, ...dateFilter },
       select: expenseSelect,
       orderBy: { date: "desc" },
     }),
     prisma.income.aggregate({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, ...dateFilter },
       _sum: { amount: true },
     }),
   ]);
@@ -48,36 +48,18 @@ export async function fetchExpensesPageData(
   let total = 0;
   let fixed = 0;
   let variable = 0;
-  let savingsContribution = 0;
-  let recurringSavingsTransfer = 0;
-  let oneOffSavingsTransfer = 0;
   for (const r of expenseRows) {
     const n = Number(r.amount);
     total += n;
     if (r.kind === "FIXED") fixed += n;
     else variable += n;
-    if (r.category === "SAVINGS_CONTRIBUTION") {
-      savingsContribution += n;
-      if (r.isRecurring) recurringSavingsTransfer += n;
-      else oneOffSavingsTransfer += n;
-    }
   }
   const totalIncome = Number(incomeAgg._sum.amount ?? 0);
-  // Savings contributions are recorded as expenses but represent money moved to savings,
-  // not discretionary spend — align net / rate with the Savings page.
-  const spendExcludingSavingsTransfers = total - savingsContribution;
-  const net = totalIncome - spendExcludingSavingsTransfers;
-  const remainingIncome = net;
-  const remainingIncomeAfterFixedSavings = remainingIncome - recurringSavingsTransfer;
-  const cashAfterAllExpenses = totalIncome - total;
-  const savingsRate = totalIncome > 0 ? (remainingIncome / totalIncome) * 100 : 0;
-  const discretionaryRateAfterFixed =
-    totalIncome > 0 ? (remainingIncomeAfterFixedSavings / totalIncome) * 100 : 0;
+  const { savings, savingsRate } = computeCashflow(totalIncome, total);
 
   const expenses: ExpenseWithMeta[] = expenseRows.map((r) => {
     const amount = Number(r.amount);
-    const sharePercent =
-      totalIncome > 0 ? (amount / totalIncome) * 100 : 0;
+    const sharePercent = totalIncome > 0 ? (amount / totalIncome) * 100 : 0;
     return {
       id: r.id,
       userId: r.userId,
@@ -121,17 +103,9 @@ export async function fetchExpensesPageData(
     total,
     fixed,
     variable,
-    savingsContribution,
-    recurringSavingsTransfer,
-    oneOffSavingsTransfer,
     totalIncome,
-    net,
-    spendExcludingSavingsTransfers,
-    remainingIncome,
-    remainingIncomeAfterFixedSavings,
-    cashAfterAllExpenses,
+    savings,
     savingsRate,
-    discretionaryRateAfterFixed,
   };
 
   return { expenses, breakdown, summary, currency };

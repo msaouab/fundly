@@ -1,30 +1,25 @@
 import { auth } from "@/auth";
 import { fetchExpensesPageData } from "@/lib/expenses/queries";
-import { formatMonthKey } from "@/lib/month";
+import { deserializeSerializedPeriod, type SerializedPeriod } from "@/lib/period";
 import { ExpensesView } from "@/app/(app)/expenses/_components/expenses-view";
 
-export async function ExpensesPageContent({
-  year,
-  month,
-}: {
-  year: number;
-  month: number;
-}) {
+export async function ExpensesPageContent({ period: serialized }: { period: SerializedPeriod }) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
     return null;
   }
 
-  const monthKey = formatMonthKey(year, month);
-  const data = await fetchExpensesPageData(userId, year, month);
+  const period = deserializeSerializedPeriod(serialized);
+  const data = await fetchExpensesPageData(userId, {
+    start: period.start,
+    end: period.end,
+  });
 
   return (
     <ExpensesView
       userId={userId}
-      monthKey={monthKey}
-      year={year}
-      month={month}
+      period={serialized}
       expenses={data.expenses}
       summary={data.summary}
       currency={data.currency}

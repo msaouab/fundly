@@ -1,31 +1,22 @@
 import { auth } from "@/auth";
 import { SavingsView } from "./_components";
 import { fetchSavingsPageData } from "@/lib/savings/queries";
-import { formatMonthKey } from "@/lib/month";
+import { deserializeSerializedPeriod, type SerializedPeriod } from "@/lib/period";
 
-export async function SavingsPageContent({
-  year,
-  month,
-}: {
-  year: number;
-  month: number;
-}) {
+export async function SavingsPageContent({ period: serialized }: { period: SerializedPeriod }) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const data = await fetchSavingsPageData(userId, year, month);
+  const period = deserializeSerializedPeriod(serialized);
+  const data = await fetchSavingsPageData(userId, period);
+
   return (
     <SavingsView
-      year={year}
-      month={month}
-      monthKey={formatMonthKey(year, month)}
       currency={data.currency}
-      monthly={data.monthly}
-      previousMonthSavedFromIncome={data.previousMonthSavedFromIncome}
-      previousMonthSavedFromIncomeAfterFixedSavings={
-        data.previousMonthSavedFromIncomeAfterFixedSavings
-      }
+      periodLabel={data.periodLabel}
+      periodTotals={data.period}
+      previousPeriodSavings={data.previousPeriodSavings}
       global={data.global}
       trend={data.trend}
     />

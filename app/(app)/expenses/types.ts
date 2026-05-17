@@ -34,25 +34,11 @@ export type ExpenseMonthSummary = {
   total: number;
   fixed: number;
   variable: number;
-  savingsContribution: number;
-  /** SAVINGS_CONTRIBUTION rows marked recurring (weekly, monthly, …). */
-  recurringSavingsTransfer: number;
-  /** SAVINGS_CONTRIBUTION one-off moves. */
-  oneOffSavingsTransfer: number;
   totalIncome: number;
-  net: number;
-  /** Spending rows except savings-category transfers: `totalExpense − savingsContribution`. */
-  spendExcludingSavingsTransfers: number;
-  /** Income minus spend excl. savings transfers (`net` alias for Savings/Dashboard wording). */
-  remainingIncome: number;
-  /** `remainingIncome − recurringSavingsTransfer` — cash left after planned recurring savings rows. */
-  remainingIncomeAfterFixedSavings: number;
-  /** Income minus every expense row (including savings transfers)—bank delta if all tracked. */
-  cashAfterAllExpenses: number;
-  /** `remainingIncome / totalIncome × 100` when income above zero — same numerator as headline net. */
+  /** Income minus all expenses this month. */
+  savings: number;
+  /** `savings / totalIncome × 100` when income above zero. */
   savingsRate: number;
-  /** `remainingIncomeAfterFixedSavings / totalIncome × 100` when income above zero. */
-  discretionaryRateAfterFixed: number;
 };
 
 export type DuplicateTarget = {

@@ -1,14 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney, formatPercent } from "@/lib/money";
+import type { SerializedPeriod } from "@/lib/period";
 import type { MonthSummary } from "../types";
 
 type IncomeSummaryProps = {
   summary: MonthSummary;
   currency: string;
+  period: SerializedPeriod;
 };
 
-export function IncomeSummary({ summary, currency }: IncomeSummaryProps) {
+export function IncomeSummary({ summary, currency, period }: IncomeSummaryProps) {
   const { total, recurring, variable } = summary;
+  const shareHint = period.monthCount === 1 ? "of month" : "of period";
   const pct = (part: number) =>
     total > 0 ? formatPercent((part / total) * 100, 0) : "0%";
 
@@ -46,7 +49,7 @@ export function IncomeSummary({ summary, currency }: IncomeSummaryProps) {
             <p className="text-2xl font-semibold tabular-nums text-foreground">
               {formatMoney(c.value, currency)}
             </p>
-            <p className="text-xs text-muted-foreground">{c.hint} of month</p>
+            <p className="text-xs text-muted-foreground">{c.hint} {shareHint}</p>
           </CardContent>
         </Card>
       ))}
