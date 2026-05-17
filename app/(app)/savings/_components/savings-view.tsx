@@ -244,14 +244,14 @@ export function SavingsView({
       </section>
 
       <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Cash flow by month</CardTitle>
-          <CardDescription>
-            Monthly breakdown for {periodLabel.toLowerCase()} (by recorded date).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="w-full min-w-0 pb-4 pt-0">
-          <MonthlyFlowBarChartSavings data={trend} currency={currency} height={CHART_HEIGHT_SAVINGS} />
+        <CardContent className="w-full min-w-0 px-4 pb-4 pt-4 sm:px-6">
+          <MonthlyFlowBarChartSavings
+            title="Cash flow by month"
+            subtitle={`Monthly breakdown for ${periodLabel.toLowerCase()} (by recorded date).`}
+            data={trend}
+            currency={currency}
+            height={CHART_HEIGHT_SAVINGS}
+          />
         </CardContent>
       </Card>
     </div>

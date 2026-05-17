@@ -9,7 +9,13 @@ export const metadata: Metadata = {
 };
 
 type PageProps = {
-  searchParams: Promise<{ month?: string; period?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    period?: string;
+    from?: string;
+    to?: string;
+    category?: string;
+  }>;
 };
 
 export default async function ExpensesPage({ searchParams }: PageProps) {
@@ -18,7 +24,7 @@ export default async function ExpensesPage({ searchParams }: PageProps) {
 
   return (
     <Suspense fallback={<ExpenseSkeleton />}>
-      <ExpensesPageContent period={period} />
+      <ExpensesPageContent period={period} category={sp.category} />
     </Suspense>
   );
 }

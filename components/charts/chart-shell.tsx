@@ -19,7 +19,10 @@ export function ChartShell({
   if (empty) {
     return (
       <div
-        className={cn("flex items-center justify-center text-sm text-muted-foreground", className)}
+        className={cn(
+          "flex items-center justify-center text-sm text-muted-foreground",
+          className,
+        )}
         style={{ height }}
       >
         {emptyMessage}
@@ -28,7 +31,13 @@ export function ChartShell({
   }
 
   return (
-    <div className={cn("w-full min-w-0", className)} style={{ height }}>
+    <div
+      className={cn(
+        "fundly-chart-host relative isolate w-full min-w-0 overflow-visible",
+        className,
+      )}
+      style={{ minHeight: height }}
+    >
       {children}
     </div>
   );

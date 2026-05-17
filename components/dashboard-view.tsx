@@ -3,7 +3,6 @@
 import {
   ArrowRight,
   Landmark,
-  PieChartIcon,
   Receipt,
   TrendingDown,
   TrendingUp,
@@ -12,7 +11,11 @@ import {
 import Link from "next/link";
 import { useMemo } from "react";
 import { CategoryPieChart, MonthlyFlowBarChart } from "@/components/charts";
-import type { SerializedPeriod } from "@/lib/period";
+import {
+  deserializeSerializedPeriod,
+  periodToQueryString,
+  type SerializedPeriod,
+} from "@/lib/period";
 import type {
   CategoryBreakdown,
   ExpenseMonthSummary,
@@ -20,7 +23,7 @@ import type {
 import type { IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { categoryBreakdownToSlices } from "@/lib/charts/adapters/category-breakdown";
-import { CHART_HEIGHT_DEFAULT } from "@/lib/charts/constants";
+import { CHART_HEIGHT_DEFAULT, CHART_HEIGHT_PIE } from "@/lib/charts/constants";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -53,8 +56,7 @@ export function DashboardView({
   previousPeriodSavings,
   largestExpense,
 }: DashboardViewProps) {
-  const periodQuery =
-    period.preset !== "custom" ? `period=${period.preset}` : `from=${period.from}&to=${period.to}`;
+  const periodQuery = periodToQueryString(deserializeSerializedPeriod(period));
 
   const savings = expenseSummary.savings;
   const deltaSavings = savings - previousPeriodSavings;
@@ -201,20 +203,14 @@ export function DashboardView({
       </section>
 
       <section
-        aria-labelledby="dash-flow-chart-title"
-        className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr),minmax(0,320px)]"
+        aria-label="Charts"
+        className="relative z-10 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr),minmax(0,320px)]"
       >
         <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
-          <CardHeader>
-            <CardTitle id="dash-flow-chart-title" className="text-base font-semibold">
-              Income, expenses, and savings by month
-            </CardTitle>
-            <CardDescription>
-              One bar per calendar month in {periodLabel.toLowerCase()}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="w-full min-w-0 pb-4 pt-0">
+          <CardContent className="relative overflow-visible w-full min-w-0 px-4 pb-4 pt-4 sm:px-6">
             <MonthlyFlowBarChart
+              title="Income, expenses, and savings by month"
+              subtitle={`One bar per calendar month in ${periodLabel.toLowerCase()}.`}
               data={flowSeries}
               currency={currency}
               height={CHART_HEIGHT_DEFAULT}
@@ -223,25 +219,24 @@ export function DashboardView({
         </Card>
 
         <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <PieChartIcon className="size-5 text-primary" aria-hidden />
-              Spending by category
-            </CardTitle>
-            <CardDescription>Share of expense total for the selected period.</CardDescription>
-          </CardHeader>
-          <CardContent className="w-full min-w-0 pb-4 pt-0">
+          <CardContent className="relative overflow-visible w-full min-w-0 px-4 pb-4 pt-4 sm:px-6">
             <CategoryPieChart
+              title="Spending by category"
+              subtitle="Share of expense total for the selected period."
               slices={categoryChart.slices}
               colors={categoryChart.colors}
               currency={currency}
-              height={CHART_HEIGHT_DEFAULT}
+              height={CHART_HEIGHT_PIE}
+              periodQuery={periodQuery}
             />
           </CardContent>
         </Card>
       </section>
 
-      <section aria-label="Highlights and shortcuts" className="grid gap-4 md:grid-cols-2">
+      <section
+        aria-label="Highlights and shortcuts"
+        className="relative z-0 grid gap-4 md:grid-cols-2"
+      >
         <Card className="border-border dark:border-zinc-800">
           <CardHeader>
             <CardTitle className="text-base font-semibold">{periodLabel} · quick facts</CardTitle>

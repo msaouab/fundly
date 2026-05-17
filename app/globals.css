@@ -64,3 +64,55 @@ button[disabled],
 button[aria-disabled="true"] {
   cursor: not-allowed;
 }
+
+/* Highcharts export menu + in-card data table */
+.highcharts-contextmenu,
+.highcharts-menu {
+  z-index: 60 !important;
+}
+
+.fundly-chart-host .highcharts-data-table {
+  position: relative;
+  z-index: 5;
+  margin-top: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--background);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+}
+
+.fundly-chart-host .highcharts-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  color: var(--foreground);
+}
+
+.fundly-chart-host .highcharts-data-table caption {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.fundly-chart-host .highcharts-data-table th,
+.fundly-chart-host .highcharts-data-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.fundly-chart-host .highcharts-data-table thead th {
+  background: var(--muted);
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.fundly-chart-host .highcharts-data-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}

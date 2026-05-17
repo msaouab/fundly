@@ -2,6 +2,7 @@ import { computeCashflow } from "@/lib/cashflow";
 import { prisma } from "@/lib/prisma";
 import { monthRangeLocal } from "@/lib/month";
 import { listMonthBucketsInRange, previousPeriod, type DatePeriod } from "@/lib/period";
+import { trimEmptyFlowMonths } from "@/lib/charts/trim-flow-series";
 import type { MonthlySavings, SavingsPageData, SavingsPoint } from "./types";
 
 async function sumIncomeAndExpense(
@@ -43,13 +44,15 @@ async function buildTrendForRange(
   end: Date,
 ): Promise<SavingsPoint[]> {
   const buckets = listMonthBucketsInRange(start, end, 36);
-  return Promise.all(
+  const series = await Promise.all(
     buckets.map(async (b) => {
       const { start: ms, end: me } = monthRangeLocal(b.year, b.month);
       const { income, expense } = await sumIncomeAndExpense(userId, ms, me);
       return toSavingsPoint(income, expense, b.monthKey, b.label);
     }),
   );
+
+  return trimEmptyFlowMonths(series);
 }
 
 function rollup(income: number, expense: number): MonthlySavings {

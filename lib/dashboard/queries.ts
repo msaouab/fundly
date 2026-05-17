@@ -8,6 +8,7 @@ import {
   previousPeriod,
   type DatePeriod,
 } from "@/lib/period";
+import { trimEmptyFlowMonths } from "@/lib/charts/trim-flow-series";
 import type { DashboardData, MonthlyFlowPoint } from "./types";
 
 async function fetchFlowSeriesForRange(
@@ -16,7 +17,7 @@ async function fetchFlowSeriesForRange(
   end: Date,
 ): Promise<MonthlyFlowPoint[]> {
   const buckets = listMonthBucketsInRange(start, end, 24);
-  return Promise.all(
+  const series = await Promise.all(
     buckets.map(async (b) => {
       const { start: ms, end: me } = monthRangeLocal(b.year, b.month);
       const [incomeAgg, expenseAgg] = await Promise.all([
@@ -41,6 +42,8 @@ async function fetchFlowSeriesForRange(
       };
     }),
   );
+
+  return trimEmptyFlowMonths(series);
 }
 
 async function fetchPeriodSavings(

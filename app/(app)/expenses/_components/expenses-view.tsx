@@ -1,9 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "../types";
 import type { ExpenseCategory } from "@/generated/prisma/enums";
-import type { SerializedPeriod } from "@/lib/period";
+import {
+  deserializeSerializedPeriod,
+  periodToQueryString,
+  type SerializedPeriod,
+} from "@/lib/period";
+import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { DuplicateExpenseBanner } from "./duplicate-modal";
 import { ExpenseCategoryBar } from "./expense-category-bar";
 import { ExpenseForm } from "./expense-form";
@@ -24,6 +30,7 @@ type ExpensesViewProps = {
   expenses: ExpenseWithMeta[];
   summary: ExpenseMonthSummary;
   currency: string;
+  filterCategory?: ExpenseCategory | null;
 };
 
 function buildBreakdownFromRows(rows: ExpenseWithMeta[]): CategoryBreakdown[] {
@@ -55,8 +62,10 @@ export function ExpensesView({
   expenses,
   summary,
   currency,
+  filterCategory = null,
 }: ExpensesViewProps) {
   const monthKey = period.to.slice(0, 7);
+  const periodQuery = periodToQueryString(deserializeSerializedPeriod(period));
   const amountRef = useRef<HTMLInputElement | null>(null);
   const [pendingExpenses, setPendingExpenses] = useState<ExpenseWithMeta[]>([]);
 
@@ -74,11 +83,14 @@ export function ExpensesView({
 
   const displayExpenses = useMemo(() => {
     const totalIncome = summary.totalIncome;
-    return mergedExpenses.map((r) => ({
+    const rows = filterCategory
+      ? mergedExpenses.filter((r) => r.category === filterCategory)
+      : mergedExpenses;
+    return rows.map((r) => ({
       ...r,
       sharePercent: totalIncome > 0 ? (r.amount / totalIncome) * 100 : 0,
     }));
-  }, [mergedExpenses, summary.totalIncome]);
+  }, [mergedExpenses, summary.totalIncome, filterCategory]);
 
   const adjustedSummary = useMemo((): ExpenseMonthSummary => {
     let extraTotal = 0;
@@ -127,6 +139,25 @@ export function ExpensesView({
         title="Expenses"
         description="Track fixed and variable spending, compare to income, and plan the month ahead."
       />
+
+      {filterCategory ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50/80 px-4 py-3 text-sm dark:border-teal-900 dark:bg-teal-950/40"
+          role="status"
+        >
+          <p className="text-foreground">
+            Showing{" "}
+            <span className="font-medium">{CATEGORY_CONFIG[filterCategory].label}</span> only
+            <span className="text-muted-foreground"> · {displayExpenses.length} entries</span>
+          </p>
+          <Link
+            href={`/expenses?${periodQuery}`}
+            className="font-medium text-teal-800 underline-offset-4 hover:underline dark:text-teal-300"
+          >
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
 
       <LedgerPageOverview>
         <ExpenseSummary summary={adjustedSummary} currency={currency} />
