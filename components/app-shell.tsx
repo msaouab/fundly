@@ -235,7 +235,7 @@ export function AppShell({ children, user }: AppShellProps) {
 
       <div
         className={cn(
-          "flex min-h-full flex-1 flex-col transition-[padding] duration-200 ease-out",
+          "flex min-h-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden transition-[padding] duration-200 ease-out",
           sidebarCollapsed ? "md:pl-16" : "md:pl-56",
         )}
       >
@@ -249,7 +249,7 @@ export function AppShell({ children, user }: AppShellProps) {
           </div>
           <UserProfileMenu name={user.name} email={user.email} className="shrink-0" />
         </header>
-        <main className="flex-1 px-4 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0))] md:px-8 md:py-8 md:pb-8">
+        <main className="min-w-0 max-w-full flex-1 overflow-x-hidden px-4 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0))] md:px-8 md:py-8 md:pb-8">
           {children}
         </main>
       </div>

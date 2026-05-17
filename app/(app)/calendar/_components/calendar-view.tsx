@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Cake, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { Cake, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { CalendarMonthNav } from "@/components/calendar-month-nav";
 import type {
   CalendarPageData,
   SerializedHoliday,
   SerializedPlannedEvent,
   SerializedYearlyEvent,
 } from "@/lib/calendar/types";
+import { writeCalendarMonthCookie } from "@/lib/calendar-month-storage";
 import { addMonths, formatMonthKey } from "@/lib/month";
+import { cn } from "@/lib/utils";
 import { CalendarAnalyticsPanel } from "./calendar-analytics";
-import { CalendarMonthGrid, formatMonthTitle } from "./calendar-month-grid";
+import { CalendarMonthGrid } from "./calendar-month-grid";
 import { EventPlanDialog } from "./event-plan-dialog";
 import { YearlyEventDialog } from "./yearly-event-dialog";
 import { YearlyEventsPanel } from "./yearly-events-panel";
@@ -19,7 +22,9 @@ import { YearlyEventsPanel } from "./yearly-events-panel";
 type CalendarViewProps = CalendarPageData;
 
 export function CalendarView(props: CalendarViewProps) {
+  const { year, month } = props;
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [yearlyDialogOpen, setYearlyDialogOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -31,15 +36,50 @@ export function CalendarView(props: CalendarViewProps) {
   const [defaultYearlyMonth, setDefaultYearlyMonth] = useState<number | undefined>();
   const [defaultYearlyDay, setDefaultYearlyDay] = useState<number | undefined>();
 
-  const monthTitle = useMemo(
-    () => formatMonthTitle(props.year, props.month),
-    [props.year, props.month],
+  const monthKey = useMemo(() => formatMonthKey(year, month), [year, month]);
+
+  const goToMonth = useCallback(
+    (key: string) => {
+      writeCalendarMonthCookie(key);
+      startTransition(() => {
+        router.push(`/calendar?month=${key}`, { scroll: false });
+      });
+    },
+    [router],
   );
 
-  function goMonth(delta: number) {
-    const next = addMonths(props.year, props.month, delta);
-    router.push(`/calendar?month=${formatMonthKey(next.year, next.month)}`, { scroll: false });
-  }
+  useEffect(() => {
+    writeCalendarMonthCookie(monthKey);
+  }, [monthKey]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (e.key === "ArrowLeft" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const prev = addMonths(year, month, -1);
+        goToMonth(formatMonthKey(prev.year, prev.month));
+      }
+      if (e.key === "ArrowRight" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const next = addMonths(year, month, 1);
+        goToMonth(formatMonthKey(next.year, next.month));
+      }
+      if ((e.key === "t" || e.key === "T") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const now = new Date();
+        goToMonth(formatMonthKey(now.getFullYear(), now.getMonth() + 1));
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [goToMonth, year, month]);
 
   function openNewPlan(start?: string) {
     setSelectedEvent(null);
@@ -90,55 +130,50 @@ export function CalendarView(props: CalendarViewProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-10">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Calendar</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Public holidays, yearly birthdays & anniversaries, and budgeted trips — all in one
             place.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border border-border dark:border-zinc-800">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <CalendarMonthNav
+            year={year}
+            month={month}
+            monthKey={monthKey}
+            onMonthKeyChange={goToMonth}
+            disabled={isPending}
+          />
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => goMonth(-1)}
-              className="inline-flex size-9 items-center justify-center rounded-l-lg hover:bg-muted"
-              aria-label="Previous month"
+              onClick={() => openYearly()}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-medium text-rose-800 hover:bg-rose-100 sm:flex-none dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 dark:hover:bg-rose-950"
             >
-              <ChevronLeft className="size-4" />
+              <Cake className="size-4" aria-hidden />
+              Birthday
             </button>
-            <span className="min-w-36 px-2 text-center text-sm font-medium">{monthTitle}</span>
             <button
               type="button"
-              onClick={() => goMonth(1)}
-              className="inline-flex size-9 items-center justify-center rounded-r-lg hover:bg-muted"
-              aria-label="Next month"
+              onClick={() => openNewPlan()}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3 text-sm font-medium text-white hover:bg-teal-800 sm:flex-none dark:bg-teal-600"
             >
-              <ChevronRight className="size-4" />
+              <Plus className="size-4" aria-hidden />
+              Plan event
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => openYearly()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-medium text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 dark:hover:bg-rose-950"
-          >
-            <Cake className="size-4" aria-hidden />
-            Birthday
-          </button>
-          <button
-            type="button"
-            onClick={() => openNewPlan()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-teal-700 px-3 text-sm font-medium text-white hover:bg-teal-800 dark:bg-teal-600"
-          >
-            <Plus className="size-4" aria-hidden />
-            Plan event
-          </button>
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+      <div
+        className={cn(
+          "grid gap-6 transition-opacity duration-200 lg:grid-cols-3",
+          isPending && "pointer-events-none opacity-60",
+        )}
+      >
+        <div className="space-y-6 lg:col-span-2">
           <CalendarMonthGrid
             days={props.days}
             onHolidayClick={(h) => openFromHoliday(h)}

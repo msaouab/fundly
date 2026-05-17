@@ -33,7 +33,10 @@ export function MonthNavPicker({
   monthSelectName,
   ariaLabel = "Select month",
 }: MonthNavPickerProps) {
-  const groups = useMemo(() => buildMonthNavYearGroups(year, month), [year, month]);
+  const groups = useMemo(
+    () => buildMonthNavYearGroups(year, month, { pastMonths: 36, futureMonths: 36 }),
+    [year, month],
+  );
 
   const triggerLabel = useMemo(() => {
     const parts = monthKey.split("-");

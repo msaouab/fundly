@@ -1,5 +1,11 @@
 import type { ReadonlyURLSearchParams } from "next/navigation";
-import { periodToQueryString, deserializeSerializedPeriod, type SerializedPeriod } from "@/lib/period";
+import {
+  deserializeSerializedPeriod,
+  parsePeriodFromSearchParams,
+  periodToQueryString,
+  type SerializedPeriod,
+} from "@/lib/period";
+import { formatMonthKey } from "@/lib/month";
 import { parsePeriodCookieValue } from "@/lib/period-storage";
 
 export function periodQueryFromSearchParams(
@@ -22,7 +28,30 @@ export function periodQueryFromSerialized(period: SerializedPeriod): string {
   return periodToQueryString(deserializeSerializedPeriod(period));
 }
 
+/** Best `month=YYYY-MM` for calendar links from a period query string. */
+export function calendarMonthFromPeriodQuery(periodQuery: string | null): string | null {
+  if (!periodQuery?.trim()) return null;
+  const sp = Object.fromEntries(new URLSearchParams(periodQuery));
+  if (sp.month?.trim() && /^\d{4}-\d{2}$/.test(sp.month.trim())) {
+    return sp.month.trim();
+  }
+  const period = parsePeriodFromSearchParams(sp);
+  if (
+    period.preset === "this_month" ||
+    period.preset === "last_month" ||
+    (period.start.getFullYear() === period.end.getFullYear() &&
+      period.start.getMonth() === period.end.getMonth())
+  ) {
+    return formatMonthKey(period.start.getFullYear(), period.start.getMonth() + 1);
+  }
+  return null;
+}
+
 export function hrefWithPeriod(href: string, periodQuery: string | null): string {
+  if (href === "/calendar") {
+    const month = calendarMonthFromPeriodQuery(periodQuery);
+    return month ? `/calendar?month=${encodeURIComponent(month)}` : "/calendar";
+  }
   if (!periodQuery) return href;
   if (href === "/") return `/?${periodQuery}`;
   return `${href}?${periodQuery}`;

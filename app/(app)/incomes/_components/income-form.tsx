@@ -8,7 +8,7 @@ import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addIncome } from "../actions";
-import { incomeFormSchema, type IncomeFormValues } from "../schema";
+import { incomeAddFormSchema, type IncomeAddFormValues } from "../schema";
 import type { IncomeWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -28,11 +28,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { normalizeDateToLocalNoon } from "@/lib/date";
 
-const defaultValues: IncomeFormValues = {
+const defaultValues: IncomeAddFormValues = {
   amount: 0,
   date: normalizeDateToLocalNoon(new Date()),
   source: "",
@@ -41,12 +40,11 @@ const defaultValues: IncomeFormValues = {
   isRecurring: false,
   recurrenceFrequency: null,
   payee: null,
-  note: null,
 };
 
 function buildOptimisticIncome(
   userId: string,
-  values: IncomeFormValues,
+  values: IncomeAddFormValues,
   codeCurrency: string,
   monthTotal: number,
 ): IncomeWithMeta {
@@ -65,7 +63,7 @@ function buildOptimisticIncome(
     isRecurring: values.isRecurring,
     recurrenceFrequency: values.recurrenceFrequency ?? null,
     payee: values.payee?.trim() ? values.payee.trim() : null,
-    note: values.note?.trim() ? values.note.trim() : null,
+    note: null,
     createdAt: now,
     updatedAt: now,
     sharePercent: newTotal > 0 ? (amount / newTotal) * 100 : 0,
@@ -91,15 +89,13 @@ export function IncomeForm({
   const [pending, startTransition] = useTransition();
   const amountRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<IncomeFormValues>({
-    resolver: zodResolver(incomeFormSchema) as Resolver<IncomeFormValues>,
+  const form = useForm<IncomeAddFormValues>({
+    resolver: zodResolver(incomeAddFormSchema) as Resolver<IncomeAddFormValues>,
     defaultValues: { ...defaultValues, currency },
   });
 
   const type = useWatch({ control: form.control, name: "type" });
   const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
-  const note = useWatch({ control: form.control, name: "note" });
-  const noteLen = (note ?? "").length;
   const showRecurring = type === "SALARY" || type === "PASSIVE";
 
   const {
@@ -131,7 +127,7 @@ export function IncomeForm({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function onSubmit(values: IncomeFormValues) {
+  function onSubmit(values: IncomeAddFormValues) {
     startTransition(async () => {
       const canOptimistic =
         typeof userId === "string" && onOptimisticAdd && onOptimisticEnd;
@@ -145,7 +141,6 @@ export function IncomeForm({
         ...values,
         currency,
         payee: values.payee || null,
-        note: values.note || null,
         recurrenceFrequency: values.isRecurring
           ? values.recurrenceFrequency ?? null
           : null,
@@ -166,7 +161,7 @@ export function IncomeForm({
         toast.error(res.error);
         if (res.fieldErrors) {
           Object.entries(res.fieldErrors).forEach(([k, v]) => {
-            form.setError(k as keyof IncomeFormValues, { message: v });
+            form.setError(k as keyof IncomeAddFormValues, { message: v });
           });
         }
       }
@@ -334,14 +329,6 @@ export function IncomeForm({
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="income-add-payee">Payee (optional)</Label>
             <Input id="income-add-payee" {...form.register("payee")} />
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="income-add-note">Note (optional)</Label>
-              <span className="text-xs text-muted-foreground">{noteLen}/200</span>
-            </div>
-            <Textarea id="income-add-note" maxLength={200} rows={3} {...form.register("note")} />
           </div>
 
           <div className="sm:col-span-2">

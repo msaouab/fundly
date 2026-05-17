@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 import type { SerializedIncome } from "./types";
-import { incomeEditFormSchema, incomeFormSchema } from "./schema";
+import { incomeAddFormSchema, incomeEditFormSchema } from "./schema";
 
 function serializeIncome(row: {
   id: string;
@@ -63,7 +63,7 @@ export async function addIncome(
 ): Promise<ActionResult<SerializedIncome>> {
   try {
     const userId = await requireUserId();
-    const parsed = incomeFormSchema.safeParse(input);
+    const parsed = incomeAddFormSchema.safeParse(input);
     if (!parsed.success) {
       const flat = parsed.error.flatten().fieldErrors;
       return {
@@ -90,7 +90,7 @@ export async function addIncome(
           ? (d.recurrenceFrequency as RecurrenceFrequency)
           : null,
         payee: d.payee || null,
-        note: d.note || null,
+        note: null,
       },
       select: {
         id: true,

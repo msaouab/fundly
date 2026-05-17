@@ -16,8 +16,6 @@ import {
   ArrowUp,
   Calendar as CalendarIcon,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Pencil,
   Repeat,
@@ -69,10 +67,12 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { TablePagination } from "@/components/table-pagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { LedgerTableScroll } from "@/components/ledger-table-scroll";
+import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-const PAGE_SIZE = 50;
 
 const ALL_INCOME_TYPES: IncomeType[] = [
   "SALARY",
@@ -130,7 +130,6 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
     key: "date" as SortKey,
     dir: "desc" as SortDir,
   });
-  const [page, setPage] = useState(0);
   const [editRow, setEditRow] = useState<IncomeWithMeta | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -179,12 +178,11 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
     return rows;
   }, [incomes, debounced, selectedTypes, allTypesSelected, sort]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageSafe = Math.min(page, pageCount - 1);
-  const slice = filtered.slice(
-    pageSafe * PAGE_SIZE,
-    pageSafe * PAGE_SIZE + PAGE_SIZE,
-  );
+  const pagination = useTablePagination(filtered.length, {
+    storageKey: "fundly-income-table-page-size",
+  });
+  const { resetPage, setPage, setPageSize, sliceItems, ...paginationMeta } = pagination;
+  const slice = sliceItems(filtered);
   const visibleSum = slice.reduce((s, r) => s + r.amount, 0);
   const monthTotal = incomes.reduce((s, r) => s + r.amount, 0);
   const visibleShare =
@@ -192,8 +190,8 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
 
   const toggleSort = useCallback((column: SortKey) => {
     dispatchSort(column);
-    setPage(0);
-  }, []);
+    resetPage();
+  }, [resetPage]);
 
   function setTypeChecked(t: IncomeType, checked: boolean) {
     setSelectedTypes((prev) => {
@@ -203,7 +201,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
       if (next.size === 0) return new Set(ALL_INCOME_TYPES);
       return next;
     });
-    setPage(0);
+    resetPage();
   }
 
   function onDeleteConfirmed() {
@@ -221,7 +219,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="w-full min-w-0 space-y-4 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input
           id={searchInputId}
@@ -230,9 +228,9 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            setPage(0);
+            resetPage();
           }}
-          className="max-w-md"
+          className="w-full sm:max-w-md"
         />
         <Popover open={typeFilterOpen} onOpenChange={setTypeFilterOpen}>
           <PopoverTrigger asChild>
@@ -287,7 +285,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                 className="flex-1"
                 onClick={() => {
                   setSelectedTypes(new Set(ALL_INCOME_TYPES));
-                  setPage(0);
+                  resetPage();
                 }}
               >
                 Select all
@@ -307,7 +305,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
             onClick={() => {
               setSearch("");
               setSelectedTypes(new Set(ALL_INCOME_TYPES));
-              setPage(0);
+              resetPage();
             }}
           >
             Reset filters
@@ -315,11 +313,88 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-sm">
+          <ul className="space-y-3 md:hidden" aria-label="Income entries">
+            {slice.map((row) => (
+              <li
+                key={row.id}
+                className="rounded-lg border border-border bg-muted/20 p-3 dark:border-zinc-800 dark:bg-zinc-900/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{row.source}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {format(new Date(row.date), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-base font-semibold tabular-nums">
+                    {formatMoney(row.amount, currency)}
+                  </p>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant={typeBadge(row.type)} className="font-normal">
+                    {row.type}
+                  </Badge>
+                  <span>{formatPercent(row.sharePercent, 1)} of total</span>
+                  {row.isRecurring ? (
+                    <span className="inline-flex items-center gap-1 text-primary">
+                      <Repeat className="size-3.5" aria-hidden />
+                      Recurring
+                    </span>
+                  ) : null}
+                </div>
+                {row.payee || row.note ? (
+                  <p className="mt-2 truncate text-xs text-muted-foreground">
+                    {[row.payee, row.note].filter(Boolean).join(" · ")}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2 dark:border-zinc-800">
+                  {row.id.startsWith("optimistic-") ? (
+                    <span className="text-xs text-muted-foreground">Saving…</span>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8"
+                        aria-label="Edit income"
+                        onClick={() => setEditRow(row)}
+                      >
+                        <Pencil className="size-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-destructive"
+                        aria-label="Delete income"
+                        onClick={() => setDeleteId(row.id)}
+                      >
+                        <Trash2 className="size-4" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="rounded-lg border border-border bg-muted/30 p-3 md:hidden dark:border-zinc-800 dark:bg-zinc-900/40">
+            <p className="text-xs font-medium text-muted-foreground">Page total</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatMoney(visibleSum, currency)}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({formatPercent(visibleShare, 1)} of month)
+              </span>
+            </p>
+          </div>
+
+          <LedgerTableScroll className="hidden md:block">
+            <table className="w-full min-w-3xl text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
-                  <th className="pb-2 pr-2">
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 font-medium hover:text-foreground"
@@ -335,7 +410,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                       ) : null}
                     </button>
                   </th>
-                  <th className="pb-2 pr-2">
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 font-medium hover:text-foreground"
@@ -351,7 +426,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                       ) : null}
                     </button>
                   </th>
-                  <th className="pb-2 pr-2">
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 font-medium hover:text-foreground"
@@ -367,7 +442,7 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                       ) : null}
                     </button>
                   </th>
-                  <th className="pb-2 pr-2">
+                  <th className={cn("pb-2 pr-2", ledgerColPrimaryText)}>
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 font-medium hover:text-foreground"
@@ -383,11 +458,11 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                       ) : null}
                     </button>
                   </th>
-                  <th className="pb-2 pr-2">Type</th>
-                  <th className="pb-2 pr-2">Recurring</th>
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Type</th>
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Recurring</th>
                   <th className="pb-2 pr-2">Payee</th>
                   <th className="pb-2 pr-2">Note</th>
-                  <th className="pb-2 pr-2">Actions</th>
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -396,20 +471,22 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                     key={row.id}
                     className="border-b border-border/60 last:border-0"
                   >
-                    <td className="py-2 pr-2 tabular-nums text-muted-foreground">
+                    <td className={cn("py-2 pr-2 tabular-nums text-muted-foreground", ledgerColNowrap)}>
                       {format(new Date(row.date), "MMM d, yyyy")}
                     </td>
-                    <td className="py-2 pr-2 font-medium tabular-nums">
+                    <td className={cn("py-2 pr-2 font-medium tabular-nums", ledgerColNowrap)}>
                       {formatMoney(row.amount, currency)}
                     </td>
-                    <td className="py-2 pr-2 text-muted-foreground">
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
                       {formatPercent(row.sharePercent, 1)}
                     </td>
-                    <td className="py-2 pr-2">{row.source}</td>
-                    <td className="py-2 pr-2">
+                    <td className={cn("py-2 pr-2", ledgerColPrimaryText)} title={row.source}>
+                      {row.source}
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                       <Badge variant={typeBadge(row.type)}>{row.type}</Badge>
                     </td>
-                    <td className="py-2 pr-2">
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                       {row.isRecurring ? (
                         <Repeat className="size-4 text-teal-600 dark:text-teal-400" />
                       ) : (
@@ -422,11 +499,11 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                     <td className="max-w-[140px] truncate py-2 pr-2 text-muted-foreground">
                       {row.note ?? "—"}
                     </td>
-                    <td className="py-2 pr-2">
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                       {row.id.startsWith("optimistic-") ? (
                         <span className="text-xs text-muted-foreground">Saving…</span>
                       ) : (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-nowrap gap-1">
                           <Button
                             type="button"
                             size="icon"
@@ -467,32 +544,17 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
                 </tr>
               </tfoot>
             </table>
-          </div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Page {pageSafe + 1} of {pageCount} · {filtered.length} rows
-            </span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pageSafe <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pageSafe >= pageCount - 1}
-                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </div>
+          </LedgerTableScroll>
+          <TablePagination
+            page={paginationMeta.page}
+            pageCount={paginationMeta.pageCount}
+            pageSize={paginationMeta.pageSize}
+            totalItems={paginationMeta.totalItems}
+            rangeStart={paginationMeta.rangeStart}
+            rangeEnd={paginationMeta.rangeEnd}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
 

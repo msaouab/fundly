@@ -10,6 +10,13 @@ import { ExpenseForm } from "./expense-form";
 import { ExpenseSummary } from "./expense-summary";
 import { ExpenseTable } from "./expense-table";
 import { NetBar } from "./net-bar";
+import {
+  LedgerPage,
+  LedgerPageActions,
+  LedgerPageHeader,
+  LedgerPageOverview,
+  LedgerPageTable,
+} from "@/components/ledger-page-layout";
 
 type ExpensesViewProps = {
   userId: string;
@@ -69,8 +76,7 @@ export function ExpensesView({
     const totalIncome = summary.totalIncome;
     return mergedExpenses.map((r) => ({
       ...r,
-      sharePercent:
-        totalIncome > 0 ? (r.amount / totalIncome) * 100 : 0,
+      sharePercent: totalIncome > 0 ? (r.amount / totalIncome) * 100 : 0,
     }));
   }, [mergedExpenses, summary.totalIncome]);
 
@@ -116,52 +122,51 @@ export function ExpensesView({
     summary.total + pendingExpenses.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Expenses</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Track fixed and variable spending, compare to income, and plan the month ahead.
-        </p>
-      </header>
+    <LedgerPage>
+      <LedgerPageHeader
+        title="Expenses"
+        description="Track fixed and variable spending, compare to income, and plan the month ahead."
+      />
 
-      <ExpenseSummary summary={adjustedSummary} currency={currency} />
-      <NetBar summary={adjustedSummary} currency={currency} />
-
-      <div className="rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <ExpenseCategoryBar
-          breakdown={displayBreakdown}
+      <LedgerPageOverview>
+        <ExpenseSummary summary={adjustedSummary} currency={currency} />
+        <NetBar summary={adjustedSummary} currency={currency} />
+        <div className="rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <ExpenseCategoryBar
+            breakdown={displayBreakdown}
+            currency={currency}
+            monthTotal={adjustedSummary.total}
+          />
+        </div>
+        <DuplicateExpenseBanner
+          expenses={displayExpenses}
           currency={currency}
-          monthTotal={adjustedSummary.total}
+          monthKey={monthKey}
         />
-      </div>
+      </LedgerPageOverview>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:items-start">
-        <div className="flex flex-col gap-6">
-          <DuplicateExpenseBanner
-            expenses={displayExpenses}
-            currency={currency}
-            monthKey={monthKey}
-          />
-          <ExpenseForm
-            currency={currency}
-            userId={userId}
-            monthExpenseTotal={monthExpenseTotalForForm}
-            monthTotalIncome={summary.totalIncome}
-            amountFocusRef={amountRef}
-            onOptimisticAdd={onOptimisticAdd}
-            onOptimisticEnd={onOptimisticEnd}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-6">
-          <ExpenseTable
-            expenses={displayExpenses}
-            currency={currency}
-            totalIncome={adjustedSummary.totalIncome}
-            monthKey={monthKey}
-            onFocusAddForm={() => amountRef.current?.focus()}
-          />
-        </div>
-      </div>
-    </div>
+      <LedgerPageActions>
+        <ExpenseForm
+          className="col-span-full w-full"
+          currency={currency}
+          userId={userId}
+          monthExpenseTotal={monthExpenseTotalForForm}
+          monthTotalIncome={summary.totalIncome}
+          amountFocusRef={amountRef}
+          onOptimisticAdd={onOptimisticAdd}
+          onOptimisticEnd={onOptimisticEnd}
+        />
+      </LedgerPageActions>
+
+      <LedgerPageTable>
+        <ExpenseTable
+          expenses={displayExpenses}
+          currency={currency}
+          totalIncome={adjustedSummary.totalIncome}
+          monthKey={monthKey}
+          onFocusAddForm={() => amountRef.current?.focus()}
+        />
+      </LedgerPageTable>
+    </LedgerPage>
   );
 }

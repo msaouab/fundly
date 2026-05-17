@@ -45,11 +45,24 @@ export type MonthNavYearGroup = {
   months: { key: string; label: string }[];
 };
 
-/** Inclusive ±12 months from anchor, grouped ascending by calendar year then month. */
-export function buildMonthNavYearGroups(anchorYear: number, anchorMonth: number): MonthNavYearGroup[] {
+export type BuildMonthNavOptions = {
+  /** Months before anchor (default 24). */
+  pastMonths?: number;
+  /** Months after anchor (default 24). */
+  futureMonths?: number;
+};
+
+/** Inclusive past/future months from anchor, grouped by calendar year. */
+export function buildMonthNavYearGroups(
+  anchorYear: number,
+  anchorMonth: number,
+  options?: BuildMonthNavOptions,
+): MonthNavYearGroup[] {
+  const past = options?.pastMonths ?? 24;
+  const future = options?.futureMonths ?? 24;
   const byYear = new Map<number, { key: string; monthNum: number; label: string }[]>();
 
-  for (let delta = -12; delta <= 12; delta++) {
+  for (let delta = -past; delta <= future; delta++) {
     const { year: y, month: m } = addMonths(anchorYear, anchorMonth, delta);
     const key = formatMonthKey(y, m);
     const label = format(new Date(y, m - 1, 1), "MMMM");

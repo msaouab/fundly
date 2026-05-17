@@ -10,6 +10,13 @@ import { IncomeSources } from "./income-sources";
 import { IncomeSummary } from "./income-summary";
 import { IncomeTable } from "./income-table";
 import type { SerializedPeriod } from "@/lib/period";
+import {
+  LedgerPage,
+  LedgerPageActions,
+  LedgerPageHeader,
+  LedgerPageOverview,
+  LedgerPageTable,
+} from "@/components/ledger-page-layout";
 
 type IncomesViewProps = {
   userId: string;
@@ -98,38 +105,32 @@ export function IncomesView({
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 pb-10 md:px-0">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Incomes</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Track salary, freelance, passive income, and other money in for your household.
-        </p>
-      </header>
-
-      <IncomeSummary summary={adjustedSummary} currency={currency} period={period} />
-      <IncomeNetBar summary={adjustedSummary} currency={currency} />
-
-      <DuplicateIncomeBanner
-        incomes={incomes}
-        currency={currency}
-        monthKey={monthKey}
+    <LedgerPage>
+      <LedgerPageHeader
+        title="Incomes"
+        description="Track salary, freelance, passive income, and other money in for your household."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:items-start">
-        <div className="flex flex-col gap-6">
-          <IncomeForm
-            currency={currency}
-            userId={userId}
-            monthTotal={summary.total}
-            onOptimisticAdd={onOptimisticAdd}
-            onOptimisticEnd={onOptimisticEnd}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-6">
-          <IncomeSources sources={displaySources} currency={currency} />
-          <IncomeTable incomes={displayIncomes} currency={currency} />
-        </div>
-      </div>
-    </div>
+      <LedgerPageOverview>
+        <IncomeSummary summary={adjustedSummary} currency={currency} period={period} />
+        <IncomeNetBar summary={adjustedSummary} currency={currency} />
+        <DuplicateIncomeBanner incomes={incomes} currency={currency} monthKey={monthKey} />
+      </LedgerPageOverview>
+
+      <LedgerPageActions>
+        <IncomeForm
+          currency={currency}
+          userId={userId}
+          monthTotal={summary.total}
+          onOptimisticAdd={onOptimisticAdd}
+          onOptimisticEnd={onOptimisticEnd}
+        />
+        <IncomeSources sources={displaySources} currency={currency} />
+      </LedgerPageActions>
+
+      <LedgerPageTable>
+        <IncomeTable incomes={displayIncomes} currency={currency} />
+      </LedgerPageTable>
+    </LedgerPage>
   );
 }

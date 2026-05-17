@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { ExpenseCategory, ExpenseKind, RecurrenceFrequency } from "@/generated/prisma/enums";
 import type { SerializedExpense } from "./types";
-import { expenseEditFormSchema, expenseFormSchema } from "./schema";
+import { expenseAddFormSchema, expenseEditFormSchema } from "./schema";
 
 function serializeExpense(row: {
   id: string;
@@ -82,7 +82,7 @@ export async function addExpense(
 ): Promise<ActionResult<SerializedExpense>> {
   try {
     const userId = await requireUserId();
-    const parsed = expenseFormSchema.safeParse(input);
+    const parsed = expenseAddFormSchema.safeParse(input);
     if (!parsed.success) {
       const flat = parsed.error.flatten().fieldErrors;
       return {
@@ -111,7 +111,7 @@ export async function addExpense(
             ? (d.recurrenceFrequency as RecurrenceFrequency)
             : null,
         payee: d.payee || null,
-        note: d.note || null,
+        note: null,
       },
       select: expenseSelect,
     });

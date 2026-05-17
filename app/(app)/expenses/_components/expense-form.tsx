@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useTransition, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
@@ -8,7 +8,7 @@ import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addExpense } from "../actions";
-import { expenseFormSchema, type ExpenseFormValues } from "../schema";
+import { expenseAddFormSchema, type ExpenseAddFormValues } from "../schema";
 import type { ExpenseKind } from "@/generated/prisma/enums";
 import type { ExpenseWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { cn } from "@/lib/utils";
 import { ExpenseTypeToggle } from "./expense-type-toggle";
 import { normalizeDateToLocalNoon } from "@/lib/date";
 
-const defaultValues: ExpenseFormValues = {
+const defaultValues: ExpenseAddFormValues = {
   amount: 0,
   date: normalizeDateToLocalNoon(new Date()),
   description: "",
@@ -45,12 +44,11 @@ const defaultValues: ExpenseFormValues = {
   isRecurring: false,
   recurrenceFrequency: null,
   payee: null,
-  note: null,
 };
 
 function buildOptimisticExpense(
   userId: string,
-  values: ExpenseFormValues,
+  values: ExpenseAddFormValues,
   codeCurrency: string,
   monthTotalIncome: number,
 ): ExpenseWithMeta {
@@ -72,7 +70,7 @@ function buildOptimisticExpense(
         ? values.recurrenceFrequency ?? null
         : null,
     payee: values.payee?.trim() ? values.payee.trim() : null,
-    note: values.note?.trim() ? values.note.trim() : null,
+    note: null,
     createdAt: now,
     updatedAt: now,
     sharePercent:
@@ -80,7 +78,31 @@ function buildOptimisticExpense(
   };
 }
 
+const formControlShell =
+  "flex h-10 w-full items-center rounded-md border border-border bg-background px-3 dark:border-zinc-700 dark:bg-zinc-950";
+
+type FormFieldProps = {
+  label: ReactNode;
+  htmlFor?: string;
+  className?: string;
+  error?: string | null;
+  children: ReactNode;
+};
+
+function FormField({ label, htmlFor, className, error, children }: FormFieldProps) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-2", className)}>
+      <Label htmlFor={htmlFor} className="min-h-5 text-sm leading-none">
+        {label}
+      </Label>
+      {children}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
 type ExpenseFormProps = {
+  className?: string;
   currency?: string;
   userId?: string;
   monthExpenseTotal?: number;
@@ -92,6 +114,7 @@ type ExpenseFormProps = {
 };
 
 export function ExpenseForm({
+  className,
   currency = "MAD",
   userId,
   monthTotalIncome = 0,
@@ -103,15 +126,13 @@ export function ExpenseForm({
   const [pending, startTransition] = useTransition();
   const internalAmountRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseFormSchema) as Resolver<ExpenseFormValues>,
+  const form = useForm<ExpenseAddFormValues>({
+    resolver: zodResolver(expenseAddFormSchema) as Resolver<ExpenseAddFormValues>,
     defaultValues: { ...defaultValues, currency },
   });
 
   const kind = useWatch({ control: form.control, name: "kind" });
   const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
-  const note = useWatch({ control: form.control, name: "note" });
-  const noteLen = (note ?? "").length;
 
   const {
     ref: amountFieldRef,
@@ -145,7 +166,7 @@ export function ExpenseForm({
     return () => window.removeEventListener("keydown", onKey);
   }, [amountFocusRef]);
 
-  function onSubmit(values: ExpenseFormValues) {
+  function onSubmit(values: ExpenseAddFormValues) {
     startTransition(async () => {
       const canOptimistic =
         typeof userId === "string" && onOptimisticAdd && onOptimisticEnd;
@@ -159,7 +180,6 @@ export function ExpenseForm({
         ...values,
         currency,
         payee: values.payee || null,
-        note: values.note || null,
         isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
         recurrenceFrequency:
           values.kind === "FIXED" && values.isRecurring
@@ -183,7 +203,7 @@ export function ExpenseForm({
         toast.error(res.error);
         if (res.fieldErrors) {
           Object.entries(res.fieldErrors).forEach(([k, v]) => {
-            form.setError(k as keyof ExpenseFormValues, { message: v });
+            form.setError(k as keyof ExpenseAddFormValues, { message: v });
           });
         }
       }
@@ -200,14 +220,18 @@ export function ExpenseForm({
       className={cn(
         "border-border bg-background ring-1 ring-transparent transition-colors dark:border-zinc-800 dark:bg-zinc-900",
         accent,
+        className,
       )}
     >
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle className="text-lg">Add expense</CardTitle>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-          <div className="space-y-2">
+      <CardContent className="pt-0">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <div className="col-span-full space-y-2">
             <p className="text-sm font-medium text-muted-foreground">Kind</p>
             <Controller
               control={form.control}
@@ -222,7 +246,7 @@ export function ExpenseForm({
             />
           </div>
 
-          <div className="space-y-2 sm:col-span-1">
+          <div className="space-y-2">
             <Label htmlFor="exp-amount">Amount ({currency})</Label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -263,7 +287,7 @@ export function ExpenseForm({
                       type="button"
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal dark:border-zinc-700",
+                        "h-10 w-full justify-start text-left font-normal dark:border-zinc-700",
                         !field.value && "text-muted-foreground",
                       )}
                     >
@@ -284,9 +308,9 @@ export function ExpenseForm({
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="exp-desc">Description (optional)</Label>
-            <Input id="exp-desc" {...form.register("description")} />
+            <Input id="exp-desc" className="h-10" {...form.register("description")} />
             {form.formState.errors.description ? (
               <p className="text-xs text-destructive">
                 {form.formState.errors.description.message}
@@ -294,20 +318,20 @@ export function ExpenseForm({
             ) : null}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="expense-category-trigger">Category</Label>
-            <Controller
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <Select
-                  name="expenseCategory"
-                  value={field.value}
-                  onValueChange={field.onChange}
-                >
-                  <SelectTrigger id="expense-category-trigger" className="dark:border-zinc-700">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
+          <div className="col-span-full grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <FormField label="Category" htmlFor="expense-category-trigger">
+              <Controller
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <Select
+                    name="expenseCategory"
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger id="expense-category-trigger" className="h-10 dark:border-zinc-700">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_CATEGORY_ORDER.map((cat) => {
                       const cfg = CATEGORY_CONFIG[cat];
@@ -324,73 +348,64 @@ export function ExpenseForm({
                 </Select>
               )}
             />
-          </div>
+            </FormField>
 
-          {kind === "FIXED" ? (
-            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-zinc-700">
-              <Label htmlFor="exp-recurring" className="cursor-pointer">
-                Recurring
-              </Label>
-              <Controller
-                control={form.control}
-                name="isRecurring"
-                render={({ field }) => (
-                  <Switch
-                    id="exp-recurring"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
+            {kind === "FIXED" ? (
+              <FormField label="Recurring" htmlFor="exp-recurring">
+                <div className={cn(formControlShell, "justify-between")}>
+                  <span className="truncate text-sm text-muted-foreground">Repeats on schedule</span>
+                  <Controller
+                    control={form.control}
+                    name="isRecurring"
+                    render={({ field }) => (
+                      <Switch
+                        id="exp-recurring"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
                   />
-                )}
-              />
-            </div>
-          ) : null}
+                </div>
+              </FormField>
+            ) : null}
 
-          {kind === "FIXED" && isRecurring ? (
-            <div className="space-y-2">
-              <Label htmlFor="expense-recurrence-trigger">Recurrence</Label>
-              <Controller
-                control={form.control}
-                name="recurrenceFrequency"
-                render={({ field }) => (
-                  <Select
-                    name="expenseRecurrence"
-                    value={field.value ?? ""}
-                    onValueChange={(v) => field.onChange(v || null)}
-                  >
-                    <SelectTrigger id="expense-recurrence-trigger" className="dark:border-zinc-700">
-                      <SelectValue placeholder="Frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="WEEKLY">Weekly</SelectItem>
-                      <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
-                      <SelectItem value="MONTHLY">Monthly</SelectItem>
-                      <SelectItem value="YEARLY">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {form.formState.errors.recurrenceFrequency ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.recurrenceFrequency.message}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="exp-payee">Payee (optional)</Label>
-            <Input id="exp-payee" {...form.register("payee")} />
+            {kind === "FIXED" && isRecurring ? (
+              <FormField
+                label="Recurrence"
+                htmlFor="expense-recurrence-trigger"
+                error={form.formState.errors.recurrenceFrequency?.message}
+              >
+                <Controller
+                  control={form.control}
+                  name="recurrenceFrequency"
+                  render={({ field }) => (
+                    <Select
+                      name="expenseRecurrence"
+                      value={field.value ?? ""}
+                      onValueChange={(v) => field.onChange(v || null)}
+                    >
+                      <SelectTrigger id="expense-recurrence-trigger" className="h-10 dark:border-zinc-700">
+                        <SelectValue placeholder="Frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="WEEKLY">Weekly</SelectItem>
+                        <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
+                        <SelectItem value="MONTHLY">Monthly</SelectItem>
+                        <SelectItem value="YEARLY">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FormField>
+            ) : null}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="exp-note">Note (optional)</Label>
-              <span className="text-xs text-muted-foreground">{noteLen}/200</span>
-            </div>
-            <Textarea id="exp-note" maxLength={200} rows={3} {...form.register("note")} />
-          </div>
 
-          <div>
+          <FormField className="sm:col-span-2" label="Payee (optional)" htmlFor="exp-payee">
+            <Input id="exp-payee" className="h-10" {...form.register("payee")} />
+          </FormField>
+
+          <div className="col-span-full flex justify-end pt-1 sm:col-span-2">
             <Button type="submit" disabled={pending} className="min-w-[140px]">
               {pending ? (
                 <>

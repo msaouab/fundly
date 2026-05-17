@@ -24,43 +24,50 @@ export const expenseRecurrenceSchema = z
   .nullable()
   .optional();
 
-export const expenseFormSchema = z
-  .object({
-    amount: z.coerce.number().positive("Amount must be positive"),
-    date: z.coerce.date().transform(normalizeDateToLocalNoon),
-    description: z
-      .string()
-      .max(200)
-      .transform((s) => s.trim()),
-    kind: expenseKindSchema,
-    category: expenseCategorySchema,
-    currency: z.string().default("MAD"),
-    isRecurring: z.boolean().default(false),
-    recurrenceFrequency: expenseRecurrenceSchema,
-    payee: z.string().trim().max(120).optional().nullable(),
+const expenseFormFields = z.object({
+  amount: z.coerce.number().positive("Amount must be positive"),
+  date: z.coerce.date().transform(normalizeDateToLocalNoon),
+  description: z
+    .string()
+    .max(200)
+    .transform((s) => s.trim()),
+  kind: expenseKindSchema,
+  category: expenseCategorySchema,
+  currency: z.string().default("MAD"),
+  isRecurring: z.boolean().default(false),
+  recurrenceFrequency: expenseRecurrenceSchema,
+  payee: z.string().trim().max(120).optional().nullable(),
+});
+
+function refineExpenseForm(
+  data: z.infer<typeof expenseFormFields>,
+  ctx: z.RefinementCtx,
+) {
+  if (data.kind === "FIXED" && data.isRecurring && !data.recurrenceFrequency) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Pick recurrence.",
+      path: ["recurrenceFrequency"],
+    });
+  }
+  if (data.kind === "VARIABLE" && data.isRecurring) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Recurring applies to fixed expenses only.",
+      path: ["isRecurring"],
+    });
+  }
+}
+
+export const expenseAddFormSchema = expenseFormFields.superRefine(refineExpenseForm);
+
+export type ExpenseAddFormValues = z.infer<typeof expenseAddFormSchema>;
+
+export const expenseEditFormSchema = expenseFormFields
+  .extend({
+    id: z.string().min(1),
     note: z.string().trim().max(200).optional().nullable(),
   })
-  .superRefine((data, ctx) => {
-    if (data.kind === "FIXED" && data.isRecurring && !data.recurrenceFrequency) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Pick recurrence.",
-        path: ["recurrenceFrequency"],
-      });
-    }
-    if (data.kind === "VARIABLE" && data.isRecurring) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Recurring applies to fixed expenses only.",
-        path: ["isRecurring"],
-      });
-    }
-  });
-
-export type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
-
-export const expenseEditFormSchema = expenseFormSchema.extend({
-  id: z.string().min(1),
-});
+  .superRefine(refineExpenseForm);
 
 export type ExpenseEditFormValues = z.infer<typeof expenseEditFormSchema>;
