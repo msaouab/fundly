@@ -10,12 +10,14 @@ import {
   readPeriodCookieClient,
   writePeriodCookie,
 } from "@/lib/period-storage";
-import {
-  periodQueryFromCookieDocument,
-  periodQueryFromSearchParams,
-} from "@/lib/period-url";
+import { periodQueryFromSearchParams } from "@/lib/period-url";
+import { usePeriodNavState } from "@/components/period-nav-provider";
+import type { SerializedPeriod } from "@/lib/period";
 
-function resolveClientPeriod(searchParams: URLSearchParams) {
+function resolvePeriod(
+  searchParams: URLSearchParams,
+  initialPeriod: SerializedPeriod | null,
+) {
   const sp = {
     period: searchParams.get("period") ?? undefined,
     from: searchParams.get("from") ?? undefined,
@@ -25,6 +27,7 @@ function resolveClientPeriod(searchParams: URLSearchParams) {
   if (hasPeriodInSearchParams(sp)) {
     return serializePeriod(parsePeriodFromSearchParams(sp));
   }
+  if (initialPeriod) return initialPeriod;
   const fromCookie = readPeriodCookieClient();
   if (fromCookie) return fromCookie;
   return serializePeriod(parsePeriodFromSearchParams(null));
@@ -34,10 +37,11 @@ export function GlobalPeriodPicker() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { initialPeriod } = usePeriodNavState();
 
   const period = useMemo(
-    () => resolveClientPeriod(searchParams),
-    [searchParams],
+    () => resolvePeriod(searchParams, initialPeriod),
+    [searchParams, initialPeriod],
   );
 
   if (!isPeriodAwareRoute(pathname)) {
@@ -61,12 +65,13 @@ export function GlobalPeriodPicker() {
   );
 }
 
-/** For nav links: period query from URL or cookie. */
+/** For nav links: period query from URL or server-provided cookie snapshot. */
 export function usePeriodNavQuery(): string | null {
   const searchParams = useSearchParams();
+  const { initialPeriodQuery } = usePeriodNavState();
   return useMemo(() => {
     const fromUrl = periodQueryFromSearchParams(searchParams);
     if (fromUrl) return fromUrl;
-    return periodQueryFromCookieDocument();
-  }, [searchParams]);
+    return initialPeriodQuery;
+  }, [searchParams, initialPeriodQuery]);
 }

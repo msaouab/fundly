@@ -9,6 +9,10 @@ import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { DashboardAuthenticatedContent } from "@/app/dashboard-auth-content";
 import { MarketingLanding } from "@/components/marketing-landing";
 import { resolveAppPeriod } from "@/lib/period-storage.server";
+import {
+  readPeriodNavQueryFromCookies,
+  readSerializedPeriodFromCookies,
+} from "@/lib/period-server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const session = await safeAuth();
@@ -31,11 +35,17 @@ export default async function Home({ searchParams }: PageProps) {
 
   if (session?.user) {
     const sp = await searchParams;
-    const period = await resolveAppPeriod(sp);
+    const [period, initialPeriodQuery, initialPeriod] = await Promise.all([
+      resolveAppPeriod(sp),
+      readPeriodNavQueryFromCookies(),
+      readSerializedPeriodFromCookies(),
+    ]);
 
     return (
       <AppShell
         user={{ email: session.user.email, name: session.user.name }}
+        initialPeriodQuery={initialPeriodQuery}
+        initialPeriod={initialPeriod}
       >
         <Suspense fallback={<DashboardSkeleton />}>
           <DashboardAuthenticatedContent

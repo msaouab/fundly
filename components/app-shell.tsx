@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Suspense, startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { GlobalPeriodPicker, usePeriodNavQuery } from "@/components/global-period-picker";
+import { PeriodNavProvider } from "@/components/period-nav-provider";
+import type { SerializedPeriod } from "@/lib/period";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -24,6 +26,8 @@ const SIDEBAR_COLLAPSED_KEY = "fundly-sidebar-collapsed";
 type AppShellProps = {
   children: React.ReactNode;
   user: { email?: string | null; name?: string | null };
+  initialPeriodQuery: string | null;
+  initialPeriod: SerializedPeriod | null;
 };
 
 function navItemClass(active: boolean, collapsed: boolean) {
@@ -111,7 +115,12 @@ function NavItemLink({
   );
 }
 
-export function AppShell({ children, user }: AppShellProps) {
+export function AppShell({
+  children,
+  user,
+  initialPeriodQuery,
+  initialPeriod,
+}: AppShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const showPeriodPicker = isPeriodAwareRoute(pathname);
@@ -141,6 +150,10 @@ export function AppShell({ children, user }: AppShellProps) {
   }, []);
 
   return (
+    <PeriodNavProvider
+      initialPeriodQuery={initialPeriodQuery}
+      initialPeriod={initialPeriod}
+    >
     <TooltipProvider>
       <div className="flex min-h-full bg-zinc-50 dark:bg-zinc-950">
       <aside
@@ -264,5 +277,6 @@ export function AppShell({ children, user }: AppShellProps) {
       </nav>
       </div>
     </TooltipProvider>
+    </PeriodNavProvider>
   );
 }
