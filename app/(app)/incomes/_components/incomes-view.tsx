@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "../types";
 import type { IncomeType } from "@/generated/prisma/enums";
 import { DuplicateIncomeBanner } from "./duplicate-modal";
@@ -34,6 +34,7 @@ export function IncomesView({
   currency,
 }: IncomesViewProps) {
   const monthKey = period.to.slice(0, 7);
+  const amountRef = useRef<HTMLInputElement | null>(null);
   const [pendingIncomes, setPendingIncomes] = useState<IncomeWithMeta[]>([]);
 
   const mergedIncomes = useMemo(() => {
@@ -104,6 +105,9 @@ export function IncomesView({
     setPendingIncomes((prev) => prev.filter((p) => p.id !== tempId));
   }, []);
 
+  const monthIncomeTotalForForm =
+    summary.total + pendingIncomes.reduce((s, p) => s + p.amount, 0);
+
   return (
     <LedgerPage>
       <LedgerPageHeader
@@ -114,22 +118,30 @@ export function IncomesView({
       <LedgerPageOverview>
         <IncomeSummary summary={adjustedSummary} currency={currency} period={period} />
         <IncomeNetBar summary={adjustedSummary} currency={currency} />
+        <div className="rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <IncomeSources sources={displaySources} currency={currency} />
+        </div>
         <DuplicateIncomeBanner incomes={incomes} currency={currency} monthKey={monthKey} />
       </LedgerPageOverview>
 
       <LedgerPageActions>
         <IncomeForm
+          className="col-span-full w-full"
           currency={currency}
           userId={userId}
-          monthTotal={summary.total}
+          monthTotal={monthIncomeTotalForForm}
+          amountFocusRef={amountRef}
           onOptimisticAdd={onOptimisticAdd}
           onOptimisticEnd={onOptimisticEnd}
         />
-        <IncomeSources sources={displaySources} currency={currency} />
       </LedgerPageActions>
 
       <LedgerPageTable>
-        <IncomeTable incomes={displayIncomes} currency={currency} />
+        <IncomeTable
+          incomes={displayIncomes}
+          currency={currency}
+          onFocusAddForm={() => amountRef.current?.focus()}
+        />
       </LedgerPageTable>
     </LedgerPage>
   );

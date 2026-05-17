@@ -12,6 +12,7 @@ import type {
 } from "@/lib/calendar/types";
 import { writeCalendarMonthCookie } from "@/lib/calendar-month-storage";
 import { addMonths, formatMonthKey } from "@/lib/month";
+import { AppPage, AppPageHeader, AppPageSection } from "@/components/ledger-page-layout";
 import { cn } from "@/lib/utils";
 import { CalendarAnalyticsPanel } from "./calendar-analytics";
 import { CalendarMonthGrid } from "./calendar-month-grid";
@@ -129,16 +130,12 @@ export function CalendarView(props: CalendarViewProps) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Calendar</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Public holidays, yearly birthdays & anniversaries, and budgeted trips — all in one
-            place.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+    <AppPage size="6xl">
+      <AppPageHeader
+        title="Calendar"
+        description="Public holidays, yearly birthdays & anniversaries, and budgeted trips — all in one place."
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <CalendarMonthNav
             year={year}
             month={month}
@@ -164,10 +161,11 @@ export function CalendarView(props: CalendarViewProps) {
               Plan event
             </button>
           </div>
-        </div>
-      </header>
+          </div>
+        }
+      />
 
-      <div
+      <AppPageSection
         className={cn(
           "grid gap-6 transition-opacity duration-200 lg:grid-cols-3",
           isPending && "pointer-events-none opacity-60",
@@ -228,7 +226,7 @@ export function CalendarView(props: CalendarViewProps) {
             </section>
           ) : null}
         </div>
-      </div>
+      </AppPageSection>
 
       <EventPlanDialog
         open={dialogOpen}
@@ -251,6 +249,6 @@ export function CalendarView(props: CalendarViewProps) {
         defaultDay={defaultYearlyDay}
         onSaved={() => router.refresh()}
       />
-    </div>
+    </AppPage>
   );
 }

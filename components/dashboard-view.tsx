@@ -26,6 +26,7 @@ import { categoryBreakdownToSlices } from "@/lib/charts/adapters/category-breakd
 import { CHART_HEIGHT_DEFAULT, CHART_HEIGHT_PIE } from "@/lib/charts/constants";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney, formatPercent } from "@/lib/money";
+import { AppPage, AppPageHeader, AppPageOverview, AppPageSection } from "@/components/ledger-page-layout";
 import { cn } from "@/lib/utils";
 import type { DashboardHighlight, MonthlyFlowPoint } from "@/lib/dashboard/types";
 
@@ -76,18 +77,19 @@ export function DashboardView({
     expenseSummary.total > 0 ? (expenseSummary.fixed / expenseSummary.total) * 100 : 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-10">
-      <header className="px-1 md:px-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {email ? (
+    <AppPage size="6xl" gap={8}>
+      <AppPageHeader
+        title="Dashboard"
+        description={
+          email ? (
             <>Signed in as {email}</>
           ) : (
             <>Income, expenses, and savings for {periodLabel}</>
-          )}
-        </p>
-      </header>
+          )
+        }
+      />
 
+      <AppPageOverview>
       <section className="grid gap-4 md:grid-cols-12" aria-labelledby="dash-savings-heading">
         <Card className="border-border md:col-span-7 lg:col-span-8 dark:border-zinc-800">
           <CardHeader className="pb-2">
@@ -201,8 +203,9 @@ export function DashboardView({
           </Card>
         </div>
       </section>
+      </AppPageOverview>
 
-      <section
+      <AppPageSection
         aria-label="Charts"
         className="relative z-10 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr),minmax(0,320px)]"
       >
@@ -231,9 +234,9 @@ export function DashboardView({
             />
           </CardContent>
         </Card>
-      </section>
+      </AppPageSection>
 
-      <section
+      <AppPageSection
         aria-label="Highlights and shortcuts"
         className="relative z-0 grid gap-4 md:grid-cols-2"
       >
@@ -296,7 +299,7 @@ export function DashboardView({
             </Link>
           </CardContent>
         </Card>
-      </section>
-    </div>
+      </AppPageSection>
+    </AppPage>
   );
 }

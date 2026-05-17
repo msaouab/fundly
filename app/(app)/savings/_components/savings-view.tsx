@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CHART_HEIGHT_SAVINGS } from "@/lib/charts/constants";
 import { formatMoney, formatPercent } from "@/lib/money";
 import type { GlobalSavings, MonthlySavings, SavingsPoint } from "@/lib/savings/types";
+import { AppPage, AppPageHeader, AppPageOverview, AppPageSection } from "@/components/ledger-page-layout";
 import { cn } from "@/lib/utils";
 
 type SavingsViewProps = {
@@ -69,15 +70,13 @@ export function SavingsView({
   const totalSavingsPositive = global.totalSavings >= 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-10">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Savings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Add income and expenses on whatever dates they happen — savings is simply income minus
-          expenses for the selected date range.
-        </p>
-      </header>
+    <AppPage size="6xl">
+      <AppPageHeader
+        title="Savings"
+        description="Add income and expenses on whatever dates they happen — savings is simply income minus expenses for the selected date range."
+      />
 
+      <AppPageOverview>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-labelledby="savings-month-kpis">
         <h2 id="savings-month-kpis" className="sr-only">
           {periodLabel}
@@ -242,7 +241,9 @@ export function SavingsView({
           </CardContent>
         </Card>
       </section>
+      </AppPageOverview>
 
+      <AppPageSection aria-label="Cash flow chart">
       <Card className="border-border min-h-0 min-w-0 dark:border-zinc-800">
         <CardContent className="w-full min-w-0 px-4 pb-4 pt-4 sm:px-6">
           <MonthlyFlowBarChartSavings
@@ -254,6 +255,7 @@ export function SavingsView({
           />
         </CardContent>
       </Card>
-    </div>
+      </AppPageSection>
+    </AppPage>
   );
 }

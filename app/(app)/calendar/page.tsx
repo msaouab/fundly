@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { AppPage } from "@/components/ledger-page-layout";
 import { CalendarPageContent } from "./calendar-content";
 
 export const metadata: Metadata = {
@@ -12,15 +13,16 @@ type PageProps = {
 
 function CalendarSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl animate-pulse space-y-6 pb-10">
-      <div className="h-8 w-48 rounded bg-muted" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-muted" />
-        ))}
+    <AppPage size="6xl" className="animate-pulse">
+      <div className="space-y-2">
+        <div className="h-8 w-48 rounded bg-muted" />
+        <div className="h-4 max-w-md rounded bg-muted" />
       </div>
-      <div className="h-96 rounded-xl bg-muted" />
-    </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="h-96 rounded-xl bg-muted lg:col-span-2" />
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    </AppPage>
   );
 }
 

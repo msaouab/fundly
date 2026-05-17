@@ -4,6 +4,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { CountrySettingsForm } from "@/components/country-settings-form";
 import { ProfileNameForm } from "@/components/profile-name-form";
 import { prisma } from "@/lib/prisma";
+import { AppPage, AppPageHeader } from "@/components/ledger-page-layout";
 import {
   Card,
   CardContent,
@@ -29,15 +30,11 @@ export default async function SettingsPage() {
   const email = profile?.email?.trim() || session?.user?.email?.trim() || "No email";
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-10">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Settings
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage account details and password security.
-        </p>
-      </header>
+    <AppPage size="3xl">
+      <AppPageHeader
+        title="Settings"
+        description="Manage account details and password security."
+      />
 
       <Card className="border-border dark:border-zinc-800">
         <CardHeader>
@@ -85,6 +82,6 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </AppPage>
   );
 }

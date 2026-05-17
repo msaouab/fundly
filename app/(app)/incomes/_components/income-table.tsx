@@ -115,9 +115,10 @@ function sortReducer(state: SortState, column: SortKey): SortState {
 type IncomeTableProps = {
   incomes: IncomeWithMeta[];
   currency: string;
+  onFocusAddForm?: () => void;
 };
 
-export function IncomeTable({ incomes, currency }: IncomeTableProps) {
+export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTableProps) {
   const searchInputId = useId();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -296,20 +297,33 @@ export function IncomeTable({ incomes, currency }: IncomeTableProps) {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-          <p>No income found.</p>
-          <Button
-            type="button"
-            variant="link"
-            className="mt-2"
-            onClick={() => {
-              setSearch("");
-              setSelectedTypes(new Set(ALL_INCOME_TYPES));
-              resetPage();
-            }}
-          >
-            Reset filters
-          </Button>
+        <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground dark:border-zinc-700">
+          {incomes.length === 0 ? (
+            <>
+              <p>No income yet.</p>
+              {onFocusAddForm ? (
+                <Button type="button" variant="link" className="mt-2" onClick={onFocusAddForm}>
+                  Focus add form
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p>No income matches your filters.</p>
+              <Button
+                type="button"
+                variant="link"
+                className="mt-2"
+                onClick={() => {
+                  setSearch("");
+                  setSelectedTypes(new Set(ALL_INCOME_TYPES));
+                  resetPage();
+                }}
+              >
+                Reset filters
+              </Button>
+            </>
+          )}
         </div>
       ) : (
         <>

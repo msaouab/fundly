@@ -22,9 +22,17 @@ export function IncomeSkeleton() {
           ))}
         </div>
         <Skeleton className="h-12 w-full rounded-lg" />
+        <div className="rounded-xl border border-border p-4 dark:border-zinc-800">
+          <Skeleton className="mb-3 h-4 w-24" />
+          <div className="flex gap-3 overflow-hidden pb-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 min-w-[180px] shrink-0 rounded-xl" />
+            ))}
+          </div>
+        </div>
       </LedgerPageOverview>
       <LedgerPageActions>
-        <Card className="border-border dark:border-zinc-800">
+        <Card className="col-span-full border-border dark:border-zinc-800">
           <CardHeader>
             <Skeleton className="h-6 w-32" />
           </CardHeader>
@@ -34,11 +42,6 @@ export function IncomeSkeleton() {
             ))}
           </CardContent>
         </Card>
-        <div className="flex gap-3 overflow-hidden pb-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 min-w-[180px] shrink-0 rounded-xl" />
-          ))}
-        </div>
       </LedgerPageActions>
       <LedgerPageTable>
         <Card className="w-full border-border dark:border-zinc-800">

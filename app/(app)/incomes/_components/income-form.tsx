@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useTransition, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addIncome } from "../actions";
 import { incomeAddFormSchema, type IncomeAddFormValues } from "../schema";
+import type { IncomeType } from "@/generated/prisma/enums";
 import type { IncomeWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -42,6 +43,14 @@ const defaultValues: IncomeAddFormValues = {
   payee: null,
 };
 
+const TYPE_ACCENT: Record<IncomeType, string> = {
+  SALARY: "border-primary/35 ring-primary/20 dark:border-primary/40 dark:ring-primary/25",
+  FREELANCE: "border-sky-500/30 ring-sky-500/15 dark:border-sky-500/35",
+  PASSIVE: "border-emerald-500/30 ring-emerald-500/15 dark:border-emerald-500/35",
+  BONUS: "border-amber-500/30 ring-amber-500/15 dark:border-amber-500/35",
+  OTHER: "border-border ring-ring/15 dark:border-zinc-700 dark:ring-ring/20",
+};
+
 function buildOptimisticIncome(
   userId: string,
   values: IncomeAddFormValues,
@@ -70,24 +79,51 @@ function buildOptimisticIncome(
   };
 }
 
+const formControlShell =
+  "flex h-10 w-full items-center rounded-md border border-border bg-background px-3 dark:border-zinc-700 dark:bg-zinc-950";
+
+type FormFieldProps = {
+  label: ReactNode;
+  htmlFor?: string;
+  className?: string;
+  error?: string | null;
+  children: ReactNode;
+};
+
+function FormField({ label, htmlFor, className, error, children }: FormFieldProps) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-2", className)}>
+      <Label htmlFor={htmlFor} className="min-h-5 text-sm leading-none">
+        {label}
+      </Label>
+      {children}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
 type IncomeFormProps = {
+  className?: string;
   currency?: string;
   userId?: string;
   monthTotal?: number;
+  amountFocusRef?: React.MutableRefObject<HTMLInputElement | null>;
   onOptimisticAdd?: (row: IncomeWithMeta) => void;
   onOptimisticEnd?: (tempId: string) => void;
 };
 
 export function IncomeForm({
+  className,
   currency = "MAD",
   userId,
   monthTotal = 0,
+  amountFocusRef,
   onOptimisticAdd,
   onOptimisticEnd,
 }: IncomeFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const amountRef = useRef<HTMLInputElement>(null);
+  const internalAmountRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<IncomeAddFormValues>({
     resolver: zodResolver(incomeAddFormSchema) as Resolver<IncomeAddFormValues>,
@@ -120,12 +156,12 @@ export function IncomeForm({
       }
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        amountRef.current?.focus();
+        (amountFocusRef?.current ?? internalAmountRef.current)?.focus();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [amountFocusRef]);
 
   function onSubmit(values: IncomeAddFormValues) {
     startTransition(async () => {
@@ -155,6 +191,7 @@ export function IncomeForm({
           ...defaultValues,
           currency,
           date: normalizeDateToLocalNoon(new Date()),
+          type: values.type,
         });
         router.refresh();
       } else {
@@ -169,16 +206,22 @@ export function IncomeForm({
   }
 
   return (
-    <Card className="border-border dark:border-zinc-800 dark:bg-zinc-900">
-      <CardHeader>
+    <Card
+      className={cn(
+        "border-border bg-background ring-1 ring-transparent transition-colors dark:border-zinc-800 dark:bg-zinc-900",
+        TYPE_ACCENT[type],
+        className,
+      )}
+    >
+      <CardHeader className="pb-3">
         <CardTitle className="text-lg">Add income</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="grid gap-4 sm:grid-cols-2"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <div className="space-y-2 sm:col-span-1">
+          <div className="space-y-2">
             <Label htmlFor="income-add-amount">Amount ({currency})</Label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -188,11 +231,14 @@ export function IncomeForm({
                 id="income-add-amount"
                 type="number"
                 step="0.01"
-                className="pl-14"
+                className="h-10 pl-14"
                 {...amountFieldRest}
                 ref={(el) => {
                   amountFieldRef(el);
-                  amountRef.current = el;
+                  internalAmountRef.current = el;
+                  if (amountFocusRef) {
+                    amountFocusRef.current = el;
+                  }
                 }}
               />
             </div>
@@ -216,14 +262,12 @@ export function IncomeForm({
                       type="button"
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "h-10 w-full justify-start text-left font-normal dark:border-zinc-700",
                         !field.value && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value
-                        ? format(field.value, "PPP")
-                        : "Pick a date"}
+                      {field.value ? format(field.value, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -239,99 +283,96 @@ export function IncomeForm({
             />
           </div>
 
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="income-add-source">Source name</Label>
-            <Input id="income-add-source" {...form.register("source")} />
-            {form.formState.errors.source ? (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.source.message}
-              </p>
-            ) : null}
-          </div>
+          <FormField
+            className="sm:col-span-2"
+            label="Source name"
+            htmlFor="income-add-source"
+            error={form.formState.errors.source?.message}
+          >
+            <Input id="income-add-source" className="h-10" {...form.register("source")} />
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="income-type-trigger">Type</Label>
-            <Controller
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <Select
-                  name="incomeType"
-                  value={field.value}
-                  onValueChange={field.onChange}
-                >
-                  <SelectTrigger id="income-type-trigger">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SALARY">Salary</SelectItem>
-                    <SelectItem value="FREELANCE">Freelance</SelectItem>
-                    <SelectItem value="PASSIVE">Passive</SelectItem>
-                    <SelectItem value="BONUS">Bonus</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          {showRecurring ? (
-            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-zinc-700">
-              <Label htmlFor="income-add-recurring" className="cursor-pointer">
-                Recurring
-              </Label>
+          <div className="col-span-full grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <FormField label="Type" htmlFor="income-type-trigger">
               <Controller
                 control={form.control}
-                name="isRecurring"
-                render={({ field }) => (
-                  <Switch
-                    id="income-add-recurring"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                )}
-              />
-            </div>
-          ) : null}
-
-          {showRecurring && isRecurring ? (
-            <div className="space-y-2">
-              <Label htmlFor="income-recurrence-trigger">Recurrence</Label>
-              <Controller
-                control={form.control}
-                name="recurrenceFrequency"
+                name="type"
                 render={({ field }) => (
                   <Select
-                    name="incomeRecurrence"
-                    value={field.value ?? ""}
-                    onValueChange={(v) => field.onChange(v || null)}
+                    name="incomeType"
+                    value={field.value}
+                    onValueChange={field.onChange}
                   >
-                    <SelectTrigger id="income-recurrence-trigger">
-                      <SelectValue placeholder="Frequency" />
+                    <SelectTrigger id="income-type-trigger" className="h-10 dark:border-zinc-700">
+                      <SelectValue placeholder="Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="WEEKLY">Weekly</SelectItem>
-                      <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
-                      <SelectItem value="MONTHLY">Monthly</SelectItem>
-                      <SelectItem value="YEARLY">Yearly</SelectItem>
+                      <SelectItem value="SALARY">Salary</SelectItem>
+                      <SelectItem value="FREELANCE">Freelance</SelectItem>
+                      <SelectItem value="PASSIVE">Passive</SelectItem>
+                      <SelectItem value="BONUS">Bonus</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               />
-              {form.formState.errors.recurrenceFrequency ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.recurrenceFrequency.message}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+            </FormField>
 
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="income-add-payee">Payee (optional)</Label>
-            <Input id="income-add-payee" {...form.register("payee")} />
+            {showRecurring ? (
+              <FormField label="Recurring" htmlFor="income-add-recurring">
+                <div className={cn(formControlShell, "justify-between")}>
+                  <span className="truncate text-sm text-muted-foreground">Repeats on schedule</span>
+                  <Controller
+                    control={form.control}
+                    name="isRecurring"
+                    render={({ field }) => (
+                      <Switch
+                        id="income-add-recurring"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+              </FormField>
+            ) : null}
+
+            {showRecurring && isRecurring ? (
+              <FormField
+                label="Recurrence"
+                htmlFor="income-recurrence-trigger"
+                error={form.formState.errors.recurrenceFrequency?.message}
+              >
+                <Controller
+                  control={form.control}
+                  name="recurrenceFrequency"
+                  render={({ field }) => (
+                    <Select
+                      name="incomeRecurrence"
+                      value={field.value ?? ""}
+                      onValueChange={(v) => field.onChange(v || null)}
+                    >
+                      <SelectTrigger id="income-recurrence-trigger" className="h-10 dark:border-zinc-700">
+                        <SelectValue placeholder="Frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="WEEKLY">Weekly</SelectItem>
+                        <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
+                        <SelectItem value="MONTHLY">Monthly</SelectItem>
+                        <SelectItem value="YEARLY">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FormField>
+            ) : null}
           </div>
 
-          <div className="sm:col-span-2">
+          <FormField className="sm:col-span-2" label="Payee (optional)" htmlFor="income-add-payee">
+            <Input id="income-add-payee" className="h-10" {...form.register("payee")} />
+          </FormField>
+
+          <div className="col-span-full flex justify-end pt-1 sm:col-span-2 lg:col-span-4">
             <Button type="submit" disabled={pending} className="min-w-[140px]">
               {pending ? (
                 <>
