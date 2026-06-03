@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
+import { EmptyState, type EmptyStateVariant } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 
 type ChartShellProps = {
   height: number;
   empty?: boolean;
+  emptyVariant?: EmptyStateVariant;
   emptyMessage?: string;
+  emptyDescription?: string;
   children: ReactNode;
   className?: string;
 };
@@ -12,20 +15,24 @@ type ChartShellProps = {
 export function ChartShell({
   height,
   empty = false,
-  emptyMessage = "No data for this period.",
+  emptyVariant = "chart-bar",
+  emptyMessage = "No data for this period",
+  emptyDescription,
   children,
   className,
 }: ChartShellProps) {
   if (empty) {
     return (
       <div
-        className={cn(
-          "flex items-center justify-center text-sm text-muted-foreground",
-          className,
-        )}
+        className={cn("flex w-full min-w-0 items-center justify-center", className)}
         style={{ height }}
       >
-        {emptyMessage}
+        <EmptyState
+          variant={emptyVariant}
+          title={emptyMessage}
+          description={emptyDescription}
+          className="h-full w-full"
+        />
       </div>
     );
   }

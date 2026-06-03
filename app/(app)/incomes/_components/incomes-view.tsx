@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import type { AddFormControls } from "@/lib/use-add-form-accordion";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "../types";
 import type { IncomeType } from "@/generated/prisma/enums";
 import { DuplicateIncomeBanner } from "./duplicate-modal";
@@ -34,7 +35,7 @@ export function IncomesView({
   currency,
 }: IncomesViewProps) {
   const monthKey = period.to.slice(0, 7);
-  const amountRef = useRef<HTMLInputElement | null>(null);
+  const addFormControlsRef = useRef<AddFormControls | null>(null);
   const [pendingIncomes, setPendingIncomes] = useState<IncomeWithMeta[]>([]);
 
   const mergedIncomes = useMemo(() => {
@@ -130,7 +131,7 @@ export function IncomesView({
           currency={currency}
           userId={userId}
           monthTotal={monthIncomeTotalForForm}
-          amountFocusRef={amountRef}
+          addFormControlsRef={addFormControlsRef}
           onOptimisticAdd={onOptimisticAdd}
           onOptimisticEnd={onOptimisticEnd}
         />
@@ -140,7 +141,7 @@ export function IncomesView({
         <IncomeTable
           incomes={displayIncomes}
           currency={currency}
-          onFocusAddForm={() => amountRef.current?.focus()}
+          onFocusAddForm={() => addFormControlsRef.current?.openAndFocus()}
         />
       </LedgerPageTable>
     </LedgerPage>

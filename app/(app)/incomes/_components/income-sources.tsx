@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney } from "@/lib/money";
@@ -27,9 +28,12 @@ type IncomeSourcesProps = {
 export function IncomeSources({ sources, currency }: IncomeSourcesProps) {
   if (!sources.length) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No income streams this month yet.
-      </p>
+      <EmptyState
+        variant="breakdown"
+        size="sm"
+        title="No income streams yet"
+        description="Add income entries to see totals grouped by source."
+      />
     );
   }
 

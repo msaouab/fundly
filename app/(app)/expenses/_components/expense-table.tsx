@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyState } from "@/components/empty-state";
 import { LedgerTableScroll } from "@/components/ledger-table-scroll";
 import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
@@ -514,35 +515,31 @@ export function ExpenseTable({
       ) : null}
 
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground dark:border-zinc-700">
-          {expenses.length === 0 ? (
-            <>
-              <p>No expenses yet.</p>
-              {onFocusAddForm ? (
-                <Button type="button" variant="link" className="mt-2" onClick={onFocusAddForm}>
-                  Focus add form
-                </Button>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <p>No expenses match your filters.</p>
-              <Button
-                type="button"
-                variant="link"
-                className="mt-2"
-                onClick={() => {
-                  setSearch("");
-                  setSelectedKinds(new Set(ALL_KINDS));
-                  setSelectedCategories(new Set(ALL_CATEGORIES));
-                  resetPage();
-                }}
-              >
-                Reset filters
-              </Button>
-            </>
-          )}
-        </div>
+        <EmptyState
+          variant={expenses.length === 0 ? "ledger" : "ledger-filtered"}
+          title={expenses.length === 0 ? "No expenses yet" : "No expenses match your filters"}
+          className="rounded-lg border border-dashed border-border dark:border-zinc-700"
+        >
+          {expenses.length === 0 && onFocusAddForm ? (
+            <Button type="button" variant="link" onClick={onFocusAddForm}>
+              Open add expense form
+            </Button>
+          ) : null}
+          {expenses.length > 0 ? (
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => {
+                setSearch("");
+                setSelectedKinds(new Set(ALL_KINDS));
+                setSelectedCategories(new Set(ALL_CATEGORIES));
+                resetPage();
+              }}
+            >
+              Reset filters
+            </Button>
+          ) : null}
+        </EmptyState>
       ) : (
         <>
           <ul className="space-y-3 md:hidden" aria-label="Expense entries">

@@ -72,7 +72,12 @@ export function CategoryPieChart({
   );
 
   return (
-    <ChartShell height={height} empty={slices.length === 0} emptyMessage={emptyMessage}>
+    <ChartShell
+      height={height}
+      empty={slices.length === 0}
+      emptyVariant="chart-pie"
+      emptyMessage={emptyMessage}
+    >
       {highcharts ? (
         <div className="fundly-chart-mount w-full">
           <HighchartsReact

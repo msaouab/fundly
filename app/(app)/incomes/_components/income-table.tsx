@@ -69,6 +69,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { TablePagination } from "@/components/table-pagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
+import { EmptyState } from "@/components/empty-state";
 import { LedgerTableScroll } from "@/components/ledger-table-scroll";
 import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
 import { formatMoney, formatPercent } from "@/lib/money";
@@ -297,34 +298,30 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground dark:border-zinc-700">
-          {incomes.length === 0 ? (
-            <>
-              <p>No income yet.</p>
-              {onFocusAddForm ? (
-                <Button type="button" variant="link" className="mt-2" onClick={onFocusAddForm}>
-                  Focus add form
-                </Button>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <p>No income matches your filters.</p>
-              <Button
-                type="button"
-                variant="link"
-                className="mt-2"
-                onClick={() => {
-                  setSearch("");
-                  setSelectedTypes(new Set(ALL_INCOME_TYPES));
-                  resetPage();
-                }}
-              >
-                Reset filters
-              </Button>
-            </>
-          )}
-        </div>
+        <EmptyState
+          variant={incomes.length === 0 ? "ledger" : "ledger-filtered"}
+          title={incomes.length === 0 ? "No income yet" : "No income matches your filters"}
+          className="rounded-lg border border-dashed border-border dark:border-zinc-700"
+        >
+          {incomes.length === 0 && onFocusAddForm ? (
+            <Button type="button" variant="link" onClick={onFocusAddForm}>
+              Open add income form
+            </Button>
+          ) : null}
+          {incomes.length > 0 ? (
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => {
+                setSearch("");
+                setSelectedTypes(new Set(ALL_INCOME_TYPES));
+                resetPage();
+              }}
+            >
+              Reset filters
+            </Button>
+          ) : null}
+        </EmptyState>
       ) : (
         <>
           <ul className="space-y-3 md:hidden" aria-label="Income entries">

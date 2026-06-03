@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useTransition, type ReactNode, type RefObject } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
@@ -13,7 +13,13 @@ import type { ExpenseKind } from "@/generated/prisma/enums";
 import type { ExpenseWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,6 +39,11 @@ import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categorie
 import { cn } from "@/lib/utils";
 import { ExpenseTypeToggle } from "./expense-type-toggle";
 import { normalizeDateToLocalNoon } from "@/lib/date";
+import {
+  ADD_FORM_ACCORDION_VALUE,
+  type AddFormControls,
+  useAddFormAccordion,
+} from "@/lib/use-add-form-accordion";
 
 const defaultValues: ExpenseAddFormValues = {
   amount: 0,
@@ -108,7 +119,8 @@ type ExpenseFormProps = {
   monthExpenseTotal?: number;
   /** Monthly income for the viewed month (share % = amount / income). */
   monthTotalIncome?: number;
-  amountFocusRef?: React.MutableRefObject<HTMLInputElement | null>;
+  amountFocusRef?: RefObject<HTMLInputElement | null>;
+  addFormControlsRef?: RefObject<AddFormControls | null>;
   onOptimisticAdd?: (row: ExpenseWithMeta) => void;
   onOptimisticEnd?: (tempId: string) => void;
 };
@@ -119,12 +131,18 @@ export function ExpenseForm({
   userId,
   monthTotalIncome = 0,
   amountFocusRef,
+  addFormControlsRef,
   onOptimisticAdd,
   onOptimisticEnd,
 }: ExpenseFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const internalAmountRef = useRef<HTMLInputElement>(null);
+  const { accordionOpen, setAccordionOpen, openAndFocusAmount } = useAddFormAccordion(
+    amountFocusRef,
+    internalAmountRef,
+    addFormControlsRef,
+  );
 
   const form = useForm<ExpenseAddFormValues>({
     resolver: zodResolver(expenseAddFormSchema) as Resolver<ExpenseAddFormValues>,
@@ -159,12 +177,12 @@ export function ExpenseForm({
       }
       if (e.key === "e" || e.key === "E") {
         e.preventDefault();
-        (amountFocusRef?.current ?? internalAmountRef.current)?.focus();
+        openAndFocusAmount();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [amountFocusRef]);
+  }, [openAndFocusAmount]);
 
   function onSubmit(values: ExpenseAddFormValues) {
     startTransition(async () => {
@@ -223,10 +241,17 @@ export function ExpenseForm({
         className,
       )}
     >
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Add expense</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <Accordion
+        type="single"
+        collapsible
+        value={accordionOpen}
+        onValueChange={setAccordionOpen}
+      >
+        <AccordionItem value={ADD_FORM_ACCORDION_VALUE} className="border-0">
+          <AccordionTrigger className="px-6 text-lg hover:no-underline">
+            Add expense
+          </AccordionTrigger>
+          <AccordionContent className="px-6">
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
@@ -418,7 +443,9 @@ export function ExpenseForm({
             </Button>
           </div>
         </form>
-      </CardContent>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </Card>
   );
 }

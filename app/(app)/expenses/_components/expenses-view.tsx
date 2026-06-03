@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
+import type { AddFormControls } from "@/lib/use-add-form-accordion";
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "../types";
 import type { ExpenseCategory } from "@/generated/prisma/enums";
 import {
@@ -66,7 +67,7 @@ export function ExpensesView({
 }: ExpensesViewProps) {
   const monthKey = period.to.slice(0, 7);
   const periodQuery = periodToQueryString(deserializeSerializedPeriod(period));
-  const amountRef = useRef<HTMLInputElement | null>(null);
+  const addFormControlsRef = useRef<AddFormControls | null>(null);
   const [pendingExpenses, setPendingExpenses] = useState<ExpenseWithMeta[]>([]);
 
   const mergedExpenses = useMemo(() => {
@@ -183,7 +184,7 @@ export function ExpensesView({
           userId={userId}
           monthExpenseTotal={monthExpenseTotalForForm}
           monthTotalIncome={summary.totalIncome}
-          amountFocusRef={amountRef}
+          addFormControlsRef={addFormControlsRef}
           onOptimisticAdd={onOptimisticAdd}
           onOptimisticEnd={onOptimisticEnd}
         />
@@ -195,7 +196,7 @@ export function ExpensesView({
           currency={currency}
           totalIncome={adjustedSummary.totalIncome}
           monthKey={monthKey}
-          onFocusAddForm={() => amountRef.current?.focus()}
+          onFocusAddForm={() => addFormControlsRef.current?.openAndFocus()}
         />
       </LedgerPageTable>
     </LedgerPage>

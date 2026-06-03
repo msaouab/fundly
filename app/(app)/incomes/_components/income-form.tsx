@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useTransition, type ReactNode, type RefObject } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
@@ -13,7 +13,13 @@ import type { IncomeType } from "@/generated/prisma/enums";
 import type { IncomeWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,6 +37,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { normalizeDateToLocalNoon } from "@/lib/date";
+import {
+  ADD_FORM_ACCORDION_VALUE,
+  type AddFormControls,
+  useAddFormAccordion,
+} from "@/lib/use-add-form-accordion";
 
 const defaultValues: IncomeAddFormValues = {
   amount: 0,
@@ -107,7 +118,8 @@ type IncomeFormProps = {
   currency?: string;
   userId?: string;
   monthTotal?: number;
-  amountFocusRef?: React.MutableRefObject<HTMLInputElement | null>;
+  amountFocusRef?: RefObject<HTMLInputElement | null>;
+  addFormControlsRef?: RefObject<AddFormControls | null>;
   onOptimisticAdd?: (row: IncomeWithMeta) => void;
   onOptimisticEnd?: (tempId: string) => void;
 };
@@ -118,12 +130,18 @@ export function IncomeForm({
   userId,
   monthTotal = 0,
   amountFocusRef,
+  addFormControlsRef,
   onOptimisticAdd,
   onOptimisticEnd,
 }: IncomeFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const internalAmountRef = useRef<HTMLInputElement>(null);
+  const { accordionOpen, setAccordionOpen, openAndFocusAmount } = useAddFormAccordion(
+    amountFocusRef,
+    internalAmountRef,
+    addFormControlsRef,
+  );
 
   const form = useForm<IncomeAddFormValues>({
     resolver: zodResolver(incomeAddFormSchema) as Resolver<IncomeAddFormValues>,
@@ -156,12 +174,12 @@ export function IncomeForm({
       }
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        (amountFocusRef?.current ?? internalAmountRef.current)?.focus();
+        openAndFocusAmount();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [amountFocusRef]);
+  }, [openAndFocusAmount]);
 
   function onSubmit(values: IncomeAddFormValues) {
     startTransition(async () => {
@@ -213,10 +231,17 @@ export function IncomeForm({
         className,
       )}
     >
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Add income</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+      <Accordion
+        type="single"
+        collapsible
+        value={accordionOpen}
+        onValueChange={setAccordionOpen}
+      >
+        <AccordionItem value={ADD_FORM_ACCORDION_VALUE} className="border-0">
+          <AccordionTrigger className="px-6 text-lg hover:no-underline">
+            Add income
+          </AccordionTrigger>
+          <AccordionContent className="px-6">
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
@@ -385,7 +410,9 @@ export function IncomeForm({
             </Button>
           </div>
         </form>
-      </CardContent>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </Card>
   );
 }

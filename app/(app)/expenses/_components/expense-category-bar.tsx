@@ -3,6 +3,7 @@
 import type { CategoryBreakdown } from "../types";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney, formatPercent } from "@/lib/money";
+import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 
 type ExpenseCategoryBarProps = {
@@ -18,9 +19,12 @@ export function ExpenseCategoryBar({
 }: ExpenseCategoryBarProps) {
   if (!breakdown.length || monthTotal <= 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No category spending this month yet.
-      </p>
+      <EmptyState
+        variant="breakdown"
+        size="sm"
+        title="No category spending yet"
+        description="Log expenses to see how spending splits across categories."
+      />
     );
   }
 
