@@ -1,12 +1,22 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { shiftDateToLocalMonth } from "@/lib/date";
+import {
+  actionFail,
+  actionOk,
+  parseActionInput,
+  requireUserId,
+  revalidateFinancePages,
+  runAction,
+  type ActionResult,
+} from "@/lib/server/actions";
 import type { IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 import type { SerializedIncome } from "./types";
 import { incomeAddFormSchema, incomeEditFormSchema } from "./schema";
+
+export type { ActionResult };
 
 function serializeIncome(row: {
   id: string;
@@ -40,42 +50,29 @@ function serializeIncome(row: {
   };
 }
 
-function revalidateFinancePages() {
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/incomes");
-  revalidatePath("/expenses");
-}
-
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  const id = session?.user?.id;
-  if (!id) throw new Error("Unauthorized");
-  return id;
-}
-
-export type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+const incomeSelect = {
+  id: true,
+  userId: true,
+  source: true,
+  type: true,
+  amount: true,
+  date: true,
+  currency: true,
+  isRecurring: true,
+  recurrenceFrequency: true,
+  payee: true,
+  note: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export async function addIncome(
   input: unknown,
 ): Promise<ActionResult<SerializedIncome>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
-    const parsed = incomeAddFormSchema.safeParse(input);
-    if (!parsed.success) {
-      const flat = parsed.error.flatten().fieldErrors;
-      return {
-        ok: false,
-        error: "Validation failed",
-        fieldErrors: Object.fromEntries(
-          Object.entries(flat)
-            .filter(([, v]) => v?.[0])
-            .map(([k, v]) => [k, v![0]]),
-        ) as Record<string, string>,
-      };
-    }
+    const parsed = parseActionInput(incomeAddFormSchema, input);
+    if (!parsed.ok) return parsed.result;
     const d = parsed.data;
     const row = await prisma.income.create({
       data: {
@@ -92,39 +89,20 @@ export async function addIncome(
         payee: d.payee || null,
         note: null,
       },
-      select: {
-        id: true,
-        userId: true,
-        source: true,
-        type: true,
-        amount: true,
-        date: true,
-        currency: true,
-        isRecurring: true,
-        recurrenceFrequency: true,
-        payee: true,
-        note: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: incomeSelect,
     });
     revalidateFinancePages();
-    return { ok: true, data: serializeIncome(row) };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to add income";
-    return { ok: false, error: message };
-  }
+    return actionOk(serializeIncome(row));
+  }, "Failed to add income");
 }
 
 export async function editIncome(
   input: unknown,
 ): Promise<ActionResult<SerializedIncome>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
-    const parsed = incomeEditFormSchema.safeParse(input);
-    if (!parsed.success) {
-      return { ok: false, error: "Validation failed" };
-    }
+    const parsed = parseActionInput(incomeEditFormSchema, input, { fieldErrors: false });
+    if (!parsed.ok) return parsed.result;
     const d = parsed.data;
     const { id, ...fields } = d;
     const existing = await prisma.income.findFirst({
@@ -132,7 +110,7 @@ export async function editIncome(
       select: { id: true },
     });
     if (!existing) {
-      return { ok: false, error: "Income not found" };
+      return actionFail("Income not found");
     }
     const row = await prisma.income.update({
       where: { id },
@@ -149,67 +127,41 @@ export async function editIncome(
         payee: fields.payee || null,
         note: fields.note || null,
       },
-      select: {
-        id: true,
-        userId: true,
-        source: true,
-        type: true,
-        amount: true,
-        date: true,
-        currency: true,
-        isRecurring: true,
-        recurrenceFrequency: true,
-        payee: true,
-        note: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: incomeSelect,
     });
     revalidateFinancePages();
-    return { ok: true, data: serializeIncome(row) };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to update";
-    return { ok: false, error: message };
-  }
+    return actionOk(serializeIncome(row));
+  }, "Failed to update");
 }
 
 export async function deleteIncome(id: string): Promise<ActionResult<{ id: string }>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
     const existing = await prisma.income.findFirst({
       where: { id, userId },
       select: { id: true },
     });
     if (!existing) {
-      return { ok: false, error: "Income not found" };
+      return actionFail("Income not found");
     }
     await prisma.income.delete({ where: { id } });
     revalidateFinancePages();
-    return { ok: true, data: { id } };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to delete";
-    return { ok: false, error: message };
-  }
-}
-
-function shiftIncomeDateToMonth(date: Date, targetYear: number, targetMonth1: number): Date {
-  const lastDay = new Date(targetYear, targetMonth1, 0).getDate();
-  const day = Math.min(date.getDate(), lastDay);
-  return new Date(targetYear, targetMonth1 - 1, day, 12, 0, 0, 0);
+    return actionOk({ id });
+  }, "Failed to delete");
 }
 
 export async function duplicateIncomes(
   ids: string[],
   targetMonthIso: string,
 ): Promise<ActionResult<{ count: number }>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
     if (!ids.length) {
-      return { ok: false, error: "No incomes selected" };
+      return actionFail("No incomes selected");
     }
     const m = z.string().regex(/^\d{4}-\d{2}$/).safeParse(targetMonthIso);
     if (!m.success) {
-      return { ok: false, error: "Invalid month" };
+      return actionFail("Invalid month");
     }
     const [ys, ms] = targetMonthIso.split("-");
     const targetYear = Number(ys);
@@ -230,14 +182,14 @@ export async function duplicateIncomes(
       },
     });
     if (!originals.length) {
-      return { ok: false, error: "Nothing to duplicate" };
+      return actionFail("Nothing to duplicate");
     }
     const data = originals.map((row) => ({
       userId: row.userId,
       source: row.source,
       type: row.type,
       amount: row.amount,
-      date: shiftIncomeDateToMonth(row.date, targetYear, targetMonth),
+      date: shiftDateToLocalMonth(row.date, targetYear, targetMonth),
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency,
@@ -246,9 +198,6 @@ export async function duplicateIncomes(
     }));
     const result = await prisma.income.createMany({ data });
     revalidateFinancePages();
-    return { ok: true, data: { count: result.count } };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Duplicate failed";
-    return { ok: false, error: message };
-  }
+    return actionOk({ count: result.count });
+  }, "Duplicate failed");
 }

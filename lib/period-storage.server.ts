@@ -1,5 +1,11 @@
 import { cookies } from "next/headers";
-import { parsePeriodFromSearchParams, serializePeriod, type SerializedPeriod } from "@/lib/period";
+import {
+  getDefaultSerializedPeriod,
+  normalizePeriodPreset,
+  parsePeriodFromSearchParams,
+  serializePeriod,
+  type SerializedPeriod,
+} from "@/lib/period";
 import {
   hasPeriodInSearchParams,
   parsePeriodCookieValue,
@@ -12,14 +18,12 @@ export async function readPeriodCookie(): Promise<SerializedPeriod | null> {
   return parsePeriodCookieValue(raw);
 }
 
-/** URL params override cookie; cookie applies when navigating without query params. */
+/** URL params when present; otherwise defaults to this month (not the period cookie). */
 export async function resolveAppPeriod(
   sp: PeriodSearchParams | null | undefined,
 ): Promise<SerializedPeriod> {
   if (hasPeriodInSearchParams(sp)) {
-    return serializePeriod(parsePeriodFromSearchParams(sp));
+    return serializePeriod(normalizePeriodPreset(parsePeriodFromSearchParams(sp)));
   }
-  const fromCookie = await readPeriodCookie();
-  if (fromCookie) return fromCookie;
-  return serializePeriod(parsePeriodFromSearchParams(null));
+  return getDefaultSerializedPeriod();
 }

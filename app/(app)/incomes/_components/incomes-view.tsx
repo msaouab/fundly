@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
+import { useLedgerOptimisticRows } from "@/hooks/use-ledger-optimistic-rows";
 import type { AddFormControls } from "@/lib/use-add-form-accordion";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "../types";
 import type { IncomeType } from "@/generated/prisma/enums";
@@ -36,19 +37,13 @@ export function IncomesView({
 }: IncomesViewProps) {
   const monthKey = period.to.slice(0, 7);
   const addFormControlsRef = useRef<AddFormControls | null>(null);
-  const [pendingIncomes, setPendingIncomes] = useState<IncomeWithMeta[]>([]);
-
-  const mergedIncomes = useMemo(() => {
-    const byId = new Map(incomes.map((r) => [r.id, r]));
-    for (const p of pendingIncomes) {
-      if (!byId.has(p.id)) {
-        byId.set(p.id, p);
-      }
-    }
-    return [...byId.values()].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-  }, [incomes, pendingIncomes]);
+  const {
+    pendingRows: pendingIncomes,
+    mergedRows: mergedIncomes,
+    pendingAmountTotal,
+    onOptimisticAdd,
+    onOptimisticEnd,
+  } = useLedgerOptimisticRows(incomes);
 
   const displayIncomes = useMemo(() => {
     const total = mergedIncomes.reduce((s, r) => s + r.amount, 0);
@@ -79,13 +74,11 @@ export function IncomesView({
   }, [displayIncomes]);
 
   const adjustedSummary = useMemo((): MonthSummary => {
-    let extraTotal = 0;
     let extraRecurring = 0;
-    for (const p of pendingIncomes) {
-      extraTotal += p.amount;
-      if (p.isRecurring) extraRecurring += p.amount;
+    for (const row of pendingIncomes) {
+      if (row.isRecurring) extraRecurring += row.amount;
     }
-    const total = summary.total + extraTotal;
+    const total = summary.total + pendingAmountTotal;
     const recurring = summary.recurring + extraRecurring;
     const variable = Math.max(0, total - recurring);
     const savings = total - summary.totalExpenses;
@@ -96,18 +89,9 @@ export function IncomesView({
       totalExpenses: summary.totalExpenses,
       savings,
     };
-  }, [pendingIncomes, summary]);
+  }, [pendingIncomes, pendingAmountTotal, summary]);
 
-  const onOptimisticAdd = useCallback((row: IncomeWithMeta) => {
-    setPendingIncomes((prev) => [row, ...prev]);
-  }, []);
-
-  const onOptimisticEnd = useCallback((tempId: string) => {
-    setPendingIncomes((prev) => prev.filter((p) => p.id !== tempId));
-  }, []);
-
-  const monthIncomeTotalForForm =
-    summary.total + pendingIncomes.reduce((s, p) => s + p.amount, 0);
+  const monthIncomeTotalForForm = summary.total + pendingAmountTotal;
 
   return (
     <LedgerPage>

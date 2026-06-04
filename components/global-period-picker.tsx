@@ -1,50 +1,59 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { isPeriodAwareRoute } from "@/lib/period-routes";
-import { parsePeriodFromSearchParams, serializePeriod } from "@/lib/period";
 import {
-  hasPeriodInSearchParams,
-  readPeriodCookieClient,
-  writePeriodCookie,
-} from "@/lib/period-storage";
+  deserializeSerializedPeriod,
+  getDefaultSerializedPeriod,
+  normalizePeriodPreset,
+  parsePeriodFromSearchParams,
+  periodToQueryString,
+  serializePeriod,
+} from "@/lib/period";
+import { hasPeriodInSearchParams, writePeriodCookie } from "@/lib/period-storage";
 import { periodQueryFromSearchParams } from "@/lib/period-url";
 import { usePeriodNavState } from "@/components/period-nav-provider";
 import type { SerializedPeriod } from "@/lib/period";
 
-function resolvePeriod(
-  searchParams: URLSearchParams,
-  initialPeriod: SerializedPeriod | null,
-) {
-  const sp = {
+function searchParamsToPeriodInput(searchParams: URLSearchParams) {
+  return {
     period: searchParams.get("period") ?? undefined,
     from: searchParams.get("from") ?? undefined,
     to: searchParams.get("to") ?? undefined,
     month: searchParams.get("month") ?? undefined,
   };
+}
+
+function resolvePeriod(searchParams: URLSearchParams) {
+  const sp = searchParamsToPeriodInput(searchParams);
   if (hasPeriodInSearchParams(sp)) {
-    return serializePeriod(parsePeriodFromSearchParams(sp));
+    return serializePeriod(normalizePeriodPreset(parsePeriodFromSearchParams(sp)));
   }
-  if (initialPeriod) return initialPeriod;
-  const fromCookie = readPeriodCookieClient();
-  if (fromCookie) return fromCookie;
-  return serializePeriod(parsePeriodFromSearchParams(null));
+  return getDefaultSerializedPeriod();
 }
 
 export function GlobalPeriodPicker() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { initialPeriod } = usePeriodNavState();
+  const period = useMemo(() => resolvePeriod(searchParams), [searchParams]);
 
-  const period = useMemo(
-    () => resolvePeriod(searchParams, initialPeriod),
-    [searchParams, initialPeriod],
-  );
+  const showPicker = isPeriodAwareRoute(pathname);
 
-  if (!isPeriodAwareRoute(pathname)) {
+  useEffect(() => {
+    if (!showPicker) return;
+    const sp = searchParamsToPeriodInput(searchParams);
+    if (hasPeriodInSearchParams(sp)) return;
+    const defaultPeriod = getDefaultSerializedPeriod();
+    writePeriodCookie(defaultPeriod);
+    const base = pathname === "/" ? "/" : pathname;
+    const qs = periodToQueryString(deserializeSerializedPeriod(defaultPeriod));
+    router.replace(`${base}?${qs}`, { scroll: false });
+  }, [showPicker, pathname, searchParams, router]);
+
+  if (!showPicker) {
     return null;
   }
 

@@ -9,10 +9,9 @@ import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { DashboardAuthenticatedContent } from "@/app/dashboard-auth-content";
 import { MarketingLanding } from "@/components/marketing-landing";
 import { resolveAppPeriod } from "@/lib/period-storage.server";
-import {
-  readPeriodNavQueryFromCookies,
-  readSerializedPeriodFromCookies,
-} from "@/lib/period-server";
+import { getDefaultSerializedPeriod } from "@/lib/period";
+import { periodQueryFromSerialized } from "@/lib/period-url";
+import { readSerializedPeriodFromCookies } from "@/lib/period-server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const session = await safeAuth();
@@ -35,11 +34,11 @@ export default async function Home({ searchParams }: PageProps) {
 
   if (session?.user) {
     const sp = await searchParams;
-    const [period, initialPeriodQuery, initialPeriod] = await Promise.all([
-      resolveAppPeriod(sp),
-      readPeriodNavQueryFromCookies(),
-      readSerializedPeriodFromCookies(),
-    ]);
+    const period = await resolveAppPeriod(sp);
+    const defaultPeriod = getDefaultSerializedPeriod();
+    const cookiePeriod = await readSerializedPeriodFromCookies();
+    const initialPeriod = cookiePeriod ?? defaultPeriod;
+    const initialPeriodQuery = periodQueryFromSerialized(initialPeriod);
 
     return (
       <AppShell

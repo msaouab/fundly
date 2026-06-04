@@ -170,6 +170,28 @@ export function parsePeriodFromSearchParams(
   return resolvePreset("this_month");
 }
 
+/** Default global filter: current calendar month. */
+export function getDefaultPeriod(): DatePeriod {
+  return resolvePreset("this_month");
+}
+
+export function getDefaultSerializedPeriod(): SerializedPeriod {
+  return serializePeriod(getDefaultPeriod());
+}
+
+/** Map a custom range that matches the current month to the `this_month` preset. */
+export function normalizePeriodPreset(period: DatePeriod): DatePeriod {
+  if (period.preset !== "custom") return period;
+  const thisMonth = getDefaultPeriod();
+  if (
+    formatDateKey(period.start) === formatDateKey(thisMonth.start) &&
+    formatDateKey(period.end) === formatDateKey(thisMonth.end)
+  ) {
+    return thisMonth;
+  }
+  return period;
+}
+
 export function deserializeSerializedPeriod(serialized: SerializedPeriod): DatePeriod {
   if (serialized.preset !== "custom") {
     return resolvePreset(serialized.preset);

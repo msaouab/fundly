@@ -2,22 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { getCountry } from "@/lib/countries";
 import { prisma } from "@/lib/prisma";
+import { requireUserId } from "@/lib/server/actions";
 import type {
   PlannedEventCategory,
   PlannedEventStatus,
   YearlyEventKind,
   YearlyEventRelation,
 } from "@/generated/prisma/enums";
-
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  const id = session?.user?.id;
-  if (!id) throw new Error("Unauthorized");
-  return id;
-}
 
 function revalidateCalendar() {
   revalidatePath("/calendar");

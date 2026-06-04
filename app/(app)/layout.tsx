@@ -2,10 +2,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
-import {
-  readPeriodNavQueryFromCookies,
-  readSerializedPeriodFromCookies,
-} from "@/lib/period-server";
+import { getDefaultSerializedPeriod } from "@/lib/period";
+import { periodQueryFromSerialized } from "@/lib/period-url";
+import { readSerializedPeriodFromCookies } from "@/lib/period-server";
 
 export default async function AppSectionLayout({
   children,
@@ -22,10 +21,10 @@ export default async function AppSectionLayout({
     select: { name: true, email: true },
   });
 
-  const [initialPeriodQuery, initialPeriod] = await Promise.all([
-    readPeriodNavQueryFromCookies(),
-    readSerializedPeriodFromCookies(),
-  ]);
+  const defaultPeriod = getDefaultSerializedPeriod();
+  const cookiePeriod = await readSerializedPeriodFromCookies();
+  const initialPeriod = cookiePeriod ?? defaultPeriod;
+  const initialPeriodQuery = periodQueryFromSerialized(initialPeriod);
 
   return (
     <AppShell

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
+import { useLedgerOptimisticRows } from "@/hooks/use-ledger-optimistic-rows";
 import type { AddFormControls } from "@/lib/use-add-form-accordion";
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "../types";
 import type { ExpenseCategory } from "@/generated/prisma/enums";
@@ -68,19 +69,13 @@ export function ExpensesView({
   const monthKey = period.to.slice(0, 7);
   const periodQuery = periodToQueryString(deserializeSerializedPeriod(period));
   const addFormControlsRef = useRef<AddFormControls | null>(null);
-  const [pendingExpenses, setPendingExpenses] = useState<ExpenseWithMeta[]>([]);
-
-  const mergedExpenses = useMemo(() => {
-    const byId = new Map(expenses.map((r) => [r.id, r]));
-    for (const p of pendingExpenses) {
-      if (!byId.has(p.id)) {
-        byId.set(p.id, p);
-      }
-    }
-    return [...byId.values()].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-  }, [expenses, pendingExpenses]);
+  const {
+    pendingRows: pendingExpenses,
+    mergedRows: mergedExpenses,
+    pendingAmountTotal,
+    onOptimisticAdd,
+    onOptimisticEnd,
+  } = useLedgerOptimisticRows(expenses);
 
   const displayExpenses = useMemo(() => {
     const totalIncome = summary.totalIncome;
@@ -94,15 +89,13 @@ export function ExpensesView({
   }, [mergedExpenses, summary.totalIncome, filterCategory]);
 
   const adjustedSummary = useMemo((): ExpenseMonthSummary => {
-    let extraTotal = 0;
     let extraFixed = 0;
     let extraVariable = 0;
-    for (const p of pendingExpenses) {
-      extraTotal += p.amount;
-      if (p.kind === "FIXED") extraFixed += p.amount;
-      else extraVariable += p.amount;
+    for (const row of pendingExpenses) {
+      if (row.kind === "FIXED") extraFixed += row.amount;
+      else extraVariable += row.amount;
     }
-    const total = summary.total + extraTotal;
+    const total = summary.total + pendingAmountTotal;
     const fixed = summary.fixed + extraFixed;
     const variable = summary.variable + extraVariable;
     const totalIncome = summary.totalIncome;
@@ -116,23 +109,14 @@ export function ExpensesView({
       savings,
       savingsRate,
     };
-  }, [pendingExpenses, summary]);
+  }, [pendingExpenses, pendingAmountTotal, summary]);
 
   const displayBreakdown = useMemo(
     () => buildBreakdownFromRows(displayExpenses),
     [displayExpenses],
   );
 
-  const onOptimisticAdd = useCallback((row: ExpenseWithMeta) => {
-    setPendingExpenses((prev) => [row, ...prev]);
-  }, []);
-
-  const onOptimisticEnd = useCallback((tempId: string) => {
-    setPendingExpenses((prev) => prev.filter((p) => p.id !== tempId));
-  }, []);
-
-  const monthExpenseTotalForForm =
-    summary.total + pendingExpenses.reduce((s, p) => s + p.amount, 0);
+  const monthExpenseTotalForForm = summary.total + pendingAmountTotal;
 
   return (
     <LedgerPage>

@@ -1,12 +1,22 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { shiftDateToLocalMonth } from "@/lib/date";
+import {
+  actionFail,
+  actionOk,
+  parseActionInput,
+  requireUserId,
+  revalidateFinancePages,
+  runAction,
+  type ActionResult,
+} from "@/lib/server/actions";
 import type { ExpenseCategory, ExpenseKind, RecurrenceFrequency } from "@/generated/prisma/enums";
 import type { SerializedExpense } from "./types";
 import { expenseAddFormSchema, expenseEditFormSchema } from "./schema";
+
+export type { ActionResult };
 
 function serializeExpense(row: {
   id: string;
@@ -42,24 +52,6 @@ function serializeExpense(row: {
   };
 }
 
-function revalidateFinancePages() {
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/incomes");
-  revalidatePath("/expenses");
-}
-
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  const id = session?.user?.id;
-  if (!id) throw new Error("Unauthorized");
-  return id;
-}
-
-export type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> };
-
 const expenseSelect = {
   id: true,
   userId: true,
@@ -80,21 +72,10 @@ const expenseSelect = {
 export async function addExpense(
   input: unknown,
 ): Promise<ActionResult<SerializedExpense>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
-    const parsed = expenseAddFormSchema.safeParse(input);
-    if (!parsed.success) {
-      const flat = parsed.error.flatten().fieldErrors;
-      return {
-        ok: false,
-        error: "Validation failed",
-        fieldErrors: Object.fromEntries(
-          Object.entries(flat)
-            .filter(([, v]) => v?.[0])
-            .map(([k, v]) => [k, v![0]]),
-        ) as Record<string, string>,
-      };
-    }
+    const parsed = parseActionInput(expenseAddFormSchema, input);
+    if (!parsed.ok) return parsed.result;
     const d = parsed.data;
     const row = await prisma.expense.create({
       data: {
@@ -116,22 +97,17 @@ export async function addExpense(
       select: expenseSelect,
     });
     revalidateFinancePages();
-    return { ok: true, data: serializeExpense(row) };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to add expense";
-    return { ok: false, error: message };
-  }
+    return actionOk(serializeExpense(row));
+  }, "Failed to add expense");
 }
 
 export async function editExpense(
   input: unknown,
 ): Promise<ActionResult<SerializedExpense>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
-    const parsed = expenseEditFormSchema.safeParse(input);
-    if (!parsed.success) {
-      return { ok: false, error: "Validation failed" };
-    }
+    const parsed = parseActionInput(expenseEditFormSchema, input, { fieldErrors: false });
+    if (!parsed.ok) return parsed.result;
     const d = parsed.data;
     const { id, ...fields } = d;
     const existing = await prisma.expense.findFirst({
@@ -139,7 +115,7 @@ export async function editExpense(
       select: { id: true },
     });
     if (!existing) {
-      return { ok: false, error: "Expense not found" };
+      return actionFail("Expense not found");
     }
     const row = await prisma.expense.update({
       where: { id },
@@ -161,67 +137,52 @@ export async function editExpense(
       select: expenseSelect,
     });
     revalidateFinancePages();
-    return { ok: true, data: serializeExpense(row) };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to update";
-    return { ok: false, error: message };
-  }
+    return actionOk(serializeExpense(row));
+  }, "Failed to update");
 }
 
 export async function deleteExpense(id: string): Promise<ActionResult<{ id: string }>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
     const existing = await prisma.expense.findFirst({
       where: { id, userId },
       select: { id: true },
     });
     if (!existing) {
-      return { ok: false, error: "Expense not found" };
+      return actionFail("Expense not found");
     }
     await prisma.expense.delete({ where: { id } });
     revalidateFinancePages();
-    return { ok: true, data: { id } };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to delete";
-    return { ok: false, error: message };
-  }
+    return actionOk({ id });
+  }, "Failed to delete");
 }
 
 export async function deleteExpenses(ids: string[]): Promise<ActionResult<{ count: number }>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
     if (!ids.length) {
-      return { ok: false, error: "No expenses selected" };
+      return actionFail("No expenses selected");
     }
     const result = await prisma.expense.deleteMany({
       where: { userId, id: { in: ids } },
     });
     revalidateFinancePages();
-    return { ok: true, data: { count: result.count } };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to delete";
-    return { ok: false, error: message };
-  }
-}
-
-function shiftExpenseDateToMonth(date: Date, targetYear: number, targetMonth1: number): Date {
-  const lastDay = new Date(targetYear, targetMonth1, 0).getDate();
-  const day = Math.min(date.getDate(), lastDay);
-  return new Date(targetYear, targetMonth1 - 1, day, 12, 0, 0, 0);
+    return actionOk({ count: result.count });
+  }, "Failed to delete");
 }
 
 export async function duplicateExpenses(
   ids: string[],
   targetMonthIso: string,
 ): Promise<ActionResult<{ count: number }>> {
-  try {
+  return runAction(async () => {
     const userId = await requireUserId();
     if (!ids.length) {
-      return { ok: false, error: "No expenses selected" };
+      return actionFail("No expenses selected");
     }
     const m = z.string().regex(/^\d{4}-\d{2}$/).safeParse(targetMonthIso);
     if (!m.success) {
-      return { ok: false, error: "Invalid month" };
+      return actionFail("Invalid month");
     }
     const [ys, ms] = targetMonthIso.split("-");
     const targetYear = Number(ys);
@@ -243,7 +204,7 @@ export async function duplicateExpenses(
       },
     });
     if (!originals.length) {
-      return { ok: false, error: "Nothing to duplicate" };
+      return actionFail("Nothing to duplicate");
     }
     const data = originals.map((row) => ({
       userId: row.userId,
@@ -251,7 +212,7 @@ export async function duplicateExpenses(
       kind: row.kind,
       category: row.category,
       amount: row.amount,
-      date: shiftExpenseDateToMonth(row.date, targetYear, targetMonth),
+      date: shiftDateToLocalMonth(row.date, targetYear, targetMonth),
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency,
@@ -260,9 +221,6 @@ export async function duplicateExpenses(
     }));
     const result = await prisma.expense.createMany({ data });
     revalidateFinancePages();
-    return { ok: true, data: { count: result.count } };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Duplicate failed";
-    return { ok: false, error: message };
-  }
+    return actionOk({ count: result.count });
+  }, "Duplicate failed");
 }
