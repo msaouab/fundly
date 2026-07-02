@@ -38,6 +38,7 @@ import { Switch } from "@/components/ui/switch";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { cn } from "@/lib/utils";
 import { ExpenseTypeToggle } from "./expense-type-toggle";
+import { PayeeSwitchField } from "@/components/payee-switch-field";
 import { normalizeDateToLocalNoon } from "@/lib/date";
 import {
   ADD_FORM_ACCORDION_VALUE,
@@ -54,7 +55,7 @@ const defaultValues: ExpenseAddFormValues = {
   currency: "MAD",
   isRecurring: false,
   recurrenceFrequency: null,
-  payee: null,
+  payee: false,
 };
 
 function buildOptimisticExpense(
@@ -80,7 +81,7 @@ function buildOptimisticExpense(
       values.kind === "FIXED" && values.isRecurring
         ? values.recurrenceFrequency ?? null
         : null,
-    payee: values.payee?.trim() ? values.payee.trim() : null,
+    payee: values.payee,
     note: null,
     createdAt: now,
     updatedAt: now,
@@ -197,7 +198,7 @@ export function ExpenseForm({
       const res = await addExpense({
         ...values,
         currency,
-        payee: values.payee || null,
+        payee: values.payee,
         isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
         recurrenceFrequency:
           values.kind === "FIXED" && values.isRecurring
@@ -423,12 +424,20 @@ export function ExpenseForm({
                 />
               </FormField>
             ) : null}
+
+            <Controller
+              control={form.control}
+              name="payee"
+              render={({ field }) => (
+                <PayeeSwitchField
+                  id="exp-payee"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={pending}
+                />
+              )}
+            />
           </div>
-
-
-          <FormField className="sm:col-span-2" label="Payee (optional)" htmlFor="exp-payee">
-            <Input id="exp-payee" className="h-10" {...form.register("payee")} />
-          </FormField>
 
           <div className="col-span-full flex justify-end pt-1 sm:col-span-2">
             <Button type="submit" disabled={pending} className="min-w-[140px]">

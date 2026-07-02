@@ -11,7 +11,7 @@ export type SerializedIncome = {
   currency: string;
   isRecurring: boolean;
   recurrenceFrequency: string | null;
-  payee: string | null;
+  payee: boolean;
   note: string | null;
   createdAt: string;
   updatedAt: string;

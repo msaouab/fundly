@@ -99,7 +99,7 @@ type IncomeRow = {
   date: Date;
   isRecurring?: boolean;
   recurrenceFrequency?: "MONTHLY" | "WEEKLY" | "BIWEEKLY" | "YEARLY";
-  payee?: string;
+  payee?: boolean;
   note?: string;
 };
 
@@ -111,7 +111,7 @@ type ExpenseRow = {
   date: Date;
   isRecurring?: boolean;
   recurrenceFrequency?: "MONTHLY" | "WEEKLY" | "BIWEEKLY" | "YEARLY";
-  payee?: string;
+  payee?: boolean;
   note?: string;
 };
 
@@ -130,7 +130,7 @@ function buildMonthIncomes(
     date: atNoon(year, month, 15),
     isRecurring: true,
     recurrenceFrequency: "MONTHLY",
-    payee: "Acme Corp — HR",
+    payee: true,
     note: "Net salary",
   });
 
@@ -140,7 +140,7 @@ function buildMonthIncomes(
       type: "SALARY",
       amount: 450,
       date: atNoon(year, month, 16),
-      payee: "Acme Corp — HR",
+      payee: true,
       note: "Transport allowance (duplicate check demo)",
     });
   }
@@ -152,7 +152,7 @@ function buildMonthIncomes(
     date: atNoon(year, month, 1),
     isRecurring: true,
     recurrenceFrequency: "BIWEEKLY",
-    payee: "Acme Corp — HR",
+    payee: true,
     note: "Mid-month advance",
   });
 
@@ -162,7 +162,7 @@ function buildMonthIncomes(
       type: "FREELANCE",
       amount: jitter(monthIndex, 2, 2_000, 5_500),
       date: atNoon(year, month, jitter(monthIndex, 3, 8, 22)),
-      payee: "Studio Nour",
+      payee: true,
     });
   }
 
@@ -174,7 +174,7 @@ function buildMonthIncomes(
       date: atNoon(year, month, 28),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "CDG Capital",
+      payee: true,
     });
   }
 
@@ -184,7 +184,7 @@ function buildMonthIncomes(
       type: "BONUS",
       amount: jitter(monthIndex, 5, 4_500, 7_000),
       date: atNoon(year, month, 20),
-      payee: "Acme Corp — HR",
+      payee: true,
     });
   }
 
@@ -211,7 +211,7 @@ function buildMonthIncomes(
       type: "FREELANCE",
       amount: jitter(monthIndex, 9, 1_500, 2_800),
       date: atNoon(year, month, 22),
-      payee: "Client Atlas",
+      payee: true,
     });
   }
 
@@ -235,7 +235,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 1),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "M. Alaoui — landlord",
+      payee: true,
     },
     {
       description: "Electricity & water",
@@ -245,7 +245,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 6),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "LYDEC",
+      payee: true,
     },
     {
       description: "Internet",
@@ -255,7 +255,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 5),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "Maroc Telecom",
+      payee: true,
     },
     {
       description: "Mobile plan",
@@ -265,7 +265,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 5),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "INWI",
+      payee: true,
     },
     {
       description: "Health insurance",
@@ -275,7 +275,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 10),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "AXA Maroc",
+      payee: true,
     },
     {
       description: "Gym membership",
@@ -285,7 +285,7 @@ function buildMonthExpenses(
       date: atNoon(year, month, 12),
       isRecurring: true,
       recurrenceFrequency: "MONTHLY",
-      payee: "Fitness Park",
+      payee: true,
     },
     {
       description: "Emergency fund transfer",
@@ -308,7 +308,7 @@ function buildMonthExpenses(
       category: "FOOD_GROCERIES",
       amount: jitter(monthIndex, 20 + g, 320, 620),
       date: atNoon(year, month, 2 + g * 5),
-      payee: g % 2 === 0 ? "Marjane" : "Carrefour",
+      payee: g % 2 === 0,
     });
   }
 
@@ -319,7 +319,7 @@ function buildMonthExpenses(
       category: "FOOD_GROCERIES",
       amount: jitter(monthIndex, 40, 1_800, 2_800),
       date: atNoon(year, month, 12),
-      payee: "Hanout & pâtisserie",
+      payee: true,
     });
     rows.push({
       description: "Eid gifts",
@@ -337,7 +337,7 @@ function buildMonthExpenses(
       category: "EDUCATION",
       amount: 4_800,
       date: atNoon(year, month, 8),
-      payee: "Collège Atlas",
+      payee: true,
     });
     rows.push({
       description: "School supplies",
@@ -345,7 +345,7 @@ function buildMonthExpenses(
       category: "EDUCATION",
       amount: 950,
       date: atNoon(year, month, 12),
-      payee: "Librairie des Écoles",
+      payee: true,
     });
   }
 
@@ -355,7 +355,7 @@ function buildMonthExpenses(
     category: "TRANSPORT",
     amount: jitter(monthIndex, 30, 650, 1_100),
     date: atNoon(year, month, 14),
-    payee: "Afriquia",
+    payee: true,
   });
 
   rows.push({
@@ -423,7 +423,7 @@ function buildMonthExpenses(
       category: "HOUSING",
       amount: 6_500,
       date: atNoon(year, month, 9),
-      payee: "Plumber & materials",
+      payee: true,
     });
     rows.push({
       description: "Electronics — unplanned",
@@ -431,7 +431,7 @@ function buildMonthExpenses(
       category: "SHOPPING",
       amount: 4_200,
       date: atNoon(year, month, 17),
-      payee: "Electroplanet",
+      payee: true,
     });
     rows.push({
       description: "Medical — not covered",
@@ -514,7 +514,7 @@ async function main() {
       currency: CURRENCY,
       isRecurring: row.isRecurring ?? false,
       recurrenceFrequency: row.recurrenceFrequency ?? null,
-      payee: row.payee ?? null,
+      payee: row.payee ?? false,
       note: row.note ?? null,
     })),
   });
@@ -530,7 +530,7 @@ async function main() {
       currency: CURRENCY,
       isRecurring: row.isRecurring ?? false,
       recurrenceFrequency: row.recurrenceFrequency ?? null,
-      payee: row.payee ?? null,
+      payee: row.payee ?? false,
       note: row.note ?? null,
     })),
   });
@@ -671,7 +671,7 @@ async function main() {
         amount: 3_200,
         date: atNoon(eidWhen.year, eidWhen.month, Math.min(eidWhen.day + 1, 28)),
         currency: CURRENCY,
-        payee: "Hanout & mall",
+        payee: true,
       },
       {
         userId: user.id,

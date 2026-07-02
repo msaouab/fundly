@@ -16,8 +16,6 @@ import type { ExpenseCategory, ExpenseKind, RecurrenceFrequency } from "@/genera
 import type { SerializedExpense } from "./types";
 import { expenseAddFormSchema, expenseEditFormSchema } from "./schema";
 
-export type { ActionResult };
-
 function serializeExpense(row: {
   id: string;
   userId: string;
@@ -29,7 +27,7 @@ function serializeExpense(row: {
   currency: string;
   isRecurring: boolean;
   recurrenceFrequency: RecurrenceFrequency | null;
-  payee: string | null;
+  payee: boolean;
   note: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -91,7 +89,7 @@ export async function addExpense(
           d.kind === "FIXED" && d.isRecurring
             ? (d.recurrenceFrequency as RecurrenceFrequency)
             : null,
-        payee: d.payee || null,
+        payee: d.payee,
         note: null,
       },
       select: expenseSelect,
@@ -131,7 +129,7 @@ export async function editExpense(
           fields.kind === "FIXED" && fields.isRecurring
             ? (fields.recurrenceFrequency as RecurrenceFrequency)
             : null,
-        payee: fields.payee || null,
+        payee: fields.payee,
         note: fields.note || null,
       },
       select: expenseSelect,

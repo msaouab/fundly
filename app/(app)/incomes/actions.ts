@@ -16,8 +16,6 @@ import type { IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 import type { SerializedIncome } from "./types";
 import { incomeAddFormSchema, incomeEditFormSchema } from "./schema";
 
-export type { ActionResult };
-
 function serializeIncome(row: {
   id: string;
   userId: string;
@@ -28,7 +26,7 @@ function serializeIncome(row: {
   currency: string;
   isRecurring: boolean;
   recurrenceFrequency: RecurrenceFrequency | null;
-  payee: string | null;
+  payee: boolean;
   note: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -86,7 +84,7 @@ export async function addIncome(
         recurrenceFrequency: d.isRecurring
           ? (d.recurrenceFrequency as RecurrenceFrequency)
           : null,
-        payee: d.payee || null,
+        payee: d.payee,
         note: null,
       },
       select: incomeSelect,
@@ -124,7 +122,7 @@ export async function editIncome(
         recurrenceFrequency: fields.isRecurring
           ? (fields.recurrenceFrequency as RecurrenceFrequency)
           : null,
-        payee: fields.payee || null,
+        payee: fields.payee,
         note: fields.note || null,
       },
       select: incomeSelect,

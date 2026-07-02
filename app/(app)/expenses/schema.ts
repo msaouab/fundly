@@ -36,7 +36,7 @@ const expenseFormFields = z.object({
   currency: z.string().default("MAD"),
   isRecurring: z.boolean().default(false),
   recurrenceFrequency: expenseRecurrenceSchema,
-  payee: z.string().trim().max(120).optional().nullable(),
+  payee: z.boolean().default(false),
 });
 
 function refineExpenseForm(

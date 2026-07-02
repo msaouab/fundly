@@ -233,7 +233,7 @@ model Income {
   currency            String               @default("MAD")
   isRecurring         Boolean              @default(false) @map("is_recurring")
   recurrenceFrequency RecurrenceFrequency? @map("recurrence_frequency")
-  payee               String?
+  payee               Boolean              @default(false)
   note                String?
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
@@ -257,7 +257,7 @@ model Expense {
   currency            String               @default("MAD")
   isRecurring         Boolean              @default(false) @map("is_recurring")
   recurrenceFrequency RecurrenceFrequency? @map("recurrence_frequency")
-  payee               String?
+  payee               Boolean              @default(false)
   note                String?
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")

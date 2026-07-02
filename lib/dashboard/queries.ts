@@ -67,7 +67,7 @@ async function fetchPeriodSavings(
 }
 
 function pickLargestExpense(
-  expenses: { description: string; payee: string | null; amount: number }[],
+  expenses: { description: string; amount: number }[],
 ): { label: string; amount: number } | null {
   if (!expenses.length) return null;
   let best = expenses[0]!;
@@ -75,10 +75,7 @@ function pickLargestExpense(
     const r = expenses[i]!;
     if (r.amount > best.amount) best = r;
   }
-  const label =
-    best.description.trim() ||
-    (typeof best.payee === "string" && best.payee.trim()) ||
-    "Expense";
+  const label = best.description.trim() || "Expense";
   return { label, amount: best.amount };
 }
 
@@ -111,7 +108,6 @@ export async function fetchDashboardData(
     largestExpense: pickLargestExpense(
       expensePage.expenses.map((e) => ({
         description: e.description,
-        payee: e.payee,
         amount: e.amount,
       })),
     ),

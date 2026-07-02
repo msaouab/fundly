@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { PayeeSwitchField } from "@/components/payee-switch-field";
 import { cn } from "@/lib/utils";
 import { normalizeDateToLocalNoon } from "@/lib/date";
 import {
@@ -51,7 +52,7 @@ const defaultValues: IncomeAddFormValues = {
   currency: "MAD",
   isRecurring: false,
   recurrenceFrequency: null,
-  payee: null,
+  payee: false,
 };
 
 const TYPE_ACCENT: Record<IncomeType, string> = {
@@ -82,7 +83,7 @@ function buildOptimisticIncome(
     currency: values.currency || codeCurrency,
     isRecurring: values.isRecurring,
     recurrenceFrequency: values.recurrenceFrequency ?? null,
-    payee: values.payee?.trim() ? values.payee.trim() : null,
+    payee: values.payee,
     note: null,
     createdAt: now,
     updatedAt: now,
@@ -194,7 +195,7 @@ export function IncomeForm({
       const res = await addIncome({
         ...values,
         currency,
-        payee: values.payee || null,
+        payee: values.payee,
         recurrenceFrequency: values.isRecurring
           ? values.recurrenceFrequency ?? null
           : null,
@@ -391,11 +392,20 @@ export function IncomeForm({
                 />
               </FormField>
             ) : null}
-          </div>
 
-          <FormField className="sm:col-span-2" label="Payee (optional)" htmlFor="income-add-payee">
-            <Input id="income-add-payee" className="h-10" {...form.register("payee")} />
-          </FormField>
+            <Controller
+              control={form.control}
+              name="payee"
+              render={({ field }) => (
+                <PayeeSwitchField
+                  id="income-add-payee"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={pending}
+                />
+              )}
+            />
+          </div>
 
           <div className="col-span-full flex justify-end pt-1 sm:col-span-2 lg:col-span-4">
             <Button type="submit" disabled={pending} className="min-w-[140px]">

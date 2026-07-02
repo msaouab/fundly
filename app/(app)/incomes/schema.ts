@@ -22,7 +22,7 @@ const incomeFormFields = z.object({
   currency: z.string().default("MAD"),
   isRecurring: z.boolean().default(false),
   recurrenceFrequency: recurrenceSchema,
-  payee: z.string().trim().max(120).optional().nullable(),
+  payee: z.boolean().default(false),
 });
 
 function refineIncomeForm(

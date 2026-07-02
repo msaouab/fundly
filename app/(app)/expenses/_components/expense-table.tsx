@@ -71,6 +71,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { PayeeSwitchField } from "@/components/payee-switch-field";
+import { PayeeYesNo } from "@/components/payee-yes-no";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/empty-state";
 import { LedgerTableScroll } from "@/components/ledger-table-scroll";
@@ -191,7 +193,7 @@ export function ExpenseTable({
       rows = rows.filter(
         (r) =>
           (r.description || "").toLowerCase().includes(debounced) ||
-          (r.payee ?? "").toLowerCase().includes(debounced),
+          (r.payee ? "yes" : "no").includes(debounced),
       );
     }
     const { key: sortKey, dir: sortDir } = sort;
@@ -593,9 +595,10 @@ export function ExpenseTable({
                           {formatPercent(row.sharePercent, 1)} of income
                         </span>
                       </div>
-                      {row.payee ? (
-                        <p className="mt-1 truncate text-xs text-muted-foreground">{row.payee}</p>
-                      ) : null}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Payee</span>
+                          <PayeeYesNo value={row.payee} />
+                        </span>
                     </div>
                   </div>
                   <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2 dark:border-zinc-800">
@@ -608,7 +611,11 @@ export function ExpenseTable({
                           size="sm"
                           variant="ghost"
                           className="h-8"
-                          onClick={() => setEditRow(row)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditRow(row);
+                          }}
                         >
                           <Pencil className="size-4" />
                           Edit
@@ -618,7 +625,11 @@ export function ExpenseTable({
                           size="sm"
                           variant="ghost"
                           className="h-8 text-destructive"
-                          onClick={() => setDeleteRow(row)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeleteRow(row);
+                          }}
                         >
                           <Trash2 className="size-4" />
                           Delete
@@ -791,7 +802,7 @@ export function ExpenseTable({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <td className={cn("relative z-10 py-2 pr-2", ledgerColNowrap)}>
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                           <span aria-hidden>{cfg.icon}</span>
                           <span className="text-muted-foreground">{cfg.label}</span>
@@ -816,8 +827,8 @@ export function ExpenseTable({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="max-w-[120px] truncate py-2 pr-2 text-muted-foreground">
-                        {row.payee ?? "—"}
+                      <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                        <PayeeYesNo value={row.payee} />
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                         {row.id.startsWith("optimistic-") ? (
@@ -830,7 +841,11 @@ export function ExpenseTable({
                               variant="ghost"
                               className="h-8 w-8 shrink-0"
                               aria-label="Edit expense"
-                              onClick={() => setEditRow(row)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditRow(row);
+                              }}
                             >
                               <Pencil className="size-4" />
                             </Button>
@@ -840,7 +855,11 @@ export function ExpenseTable({
                               variant="ghost"
                               className="h-8 w-8 shrink-0 text-destructive"
                               aria-label="Delete expense"
-                              onClick={() => setDeleteRow(row)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDeleteRow(row);
+                              }}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -1007,7 +1026,7 @@ function EditExpenseSheetForm({
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency as ExpenseEditFormValues["recurrenceFrequency"],
-      payee: row.payee ?? "",
+      payee: row.payee,
       note: row.note ?? "",
     },
   });
@@ -1033,7 +1052,7 @@ function EditExpenseSheetForm({
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency as ExpenseEditFormValues["recurrenceFrequency"],
-      payee: row.payee ?? "",
+      payee: row.payee,
       note: row.note ?? "",
     });
   }, [row, form]);
@@ -1043,7 +1062,7 @@ function EditExpenseSheetForm({
       const res = await editExpense({
         ...values,
         currency,
-        payee: values.payee === "" || values.payee == null ? null : values.payee,
+        payee: values.payee,
         note: values.note === "" || values.note == null ? null : values.note,
         isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
         recurrenceFrequency:
@@ -1197,10 +1216,17 @@ function EditExpenseSheetForm({
             )}
           />
         ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="edit-expense-payee">Payee</Label>
-          <Input id="edit-expense-payee" {...form.register("payee")} />
-        </div>
+        <Controller
+          control={form.control}
+          name="payee"
+          render={({ field }) => (
+            <PayeeSwitchField
+              id="edit-expense-payee"
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          )}
+        />
         <div className="space-y-2">
           <Label htmlFor="edit-expense-note">Note</Label>
           <Textarea id="edit-expense-note" rows={3} maxLength={200} {...form.register("note")} />

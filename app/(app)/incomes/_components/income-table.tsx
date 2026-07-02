@@ -66,6 +66,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { PayeeSwitchField } from "@/components/payee-switch-field";
+import { PayeeYesNo } from "@/components/payee-yes-no";
 import { Textarea } from "@/components/ui/textarea";
 import { TablePagination } from "@/components/table-pagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
@@ -160,7 +162,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
       rows = rows.filter(
         (r) =>
           r.source.toLowerCase().includes(debounced) ||
-          (r.payee ?? "").toLowerCase().includes(debounced),
+          (r.payee ? "yes" : "no").includes(debounced),
       );
     }
     const { key: sortKey, dir: sortDir } = sort;
@@ -352,11 +354,12 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                       Recurring
                     </span>
                   ) : null}
+                  <span className="inline-flex items-center gap-1">
+                    Payee <PayeeYesNo value={row.payee} />
+                  </span>
                 </div>
-                {row.payee || row.note ? (
-                  <p className="mt-2 truncate text-xs text-muted-foreground">
-                    {[row.payee, row.note].filter(Boolean).join(" · ")}
-                  </p>
+                {row.note ? (
+                  <p className="mt-2 truncate text-xs text-muted-foreground">{row.note}</p>
                 ) : null}
                 <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2 dark:border-zinc-800">
                   {row.id.startsWith("optimistic-") ? (
@@ -504,8 +507,8 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="max-w-[120px] truncate py-2 pr-2 text-muted-foreground">
-                      {row.payee ?? "—"}
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <PayeeYesNo value={row.payee} />
                     </td>
                     <td className="max-w-[140px] truncate py-2 pr-2 text-muted-foreground">
                       {row.note ?? "—"}
@@ -664,7 +667,7 @@ function EditIncomeSheetForm({
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency as IncomeEditFormValues["recurrenceFrequency"],
-      payee: row.payee ?? "",
+      payee: row.payee,
       note: row.note ?? "",
     },
   });
@@ -690,7 +693,7 @@ function EditIncomeSheetForm({
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency as IncomeEditFormValues["recurrenceFrequency"],
-      payee: row.payee ?? "",
+      payee: row.payee,
       note: row.note ?? "",
     });
   }, [row, form]);
@@ -700,7 +703,7 @@ function EditIncomeSheetForm({
       const res = await editIncome({
         ...values,
         currency,
-        payee: values.payee === "" || values.payee == null ? null : values.payee,
+        payee: values.payee,
         note: values.note === "" || values.note == null ? null : values.note,
         recurrenceFrequency: values.isRecurring
           ? values.recurrenceFrequency ?? null
@@ -835,10 +838,17 @@ function EditIncomeSheetForm({
             )}
           />
         ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="edit-income-payee">Payee</Label>
-          <Input id="edit-income-payee" {...form.register("payee")} />
-        </div>
+        <Controller
+          control={form.control}
+          name="payee"
+          render={({ field }) => (
+            <PayeeSwitchField
+              id="edit-income-payee"
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          )}
+        />
         <div className="space-y-2">
           <Label htmlFor="edit-income-note">Note</Label>
           <Textarea id="edit-income-note" rows={3} maxLength={200} {...form.register("note")} />
