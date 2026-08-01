@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
-import { useForm, Controller, type Resolver } from "react-hook-form";
+import { useForm, Controller, useWatch, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -12,9 +12,12 @@ import {
   updateRecurringExpense,
 } from "../actions";
 import {
+  fromOccurrenceCount,
   recurringExpenseFormSchema,
   type RecurringExpenseFormValues,
 } from "../schema";
+import { RecurringEndsFields } from "./recurring-ends-fields";
+import { RecurringStartsAtField } from "./recurring-starts-at-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,7 +47,10 @@ import {
 } from "@/components/ui/dialog";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney } from "@/lib/money";
+import { normalizeDateToLocalNoon } from "@/lib/date";
+import { formatOccurrenceEnds } from "@/lib/recurring/occurrence";
 import type { ExpenseCategory, RecurrenceFrequency } from "@/generated/prisma/enums";
+import { format } from "date-fns";
 
 export type RecurringExpenseRow = {
   id: string;
@@ -53,6 +59,8 @@ export type RecurringExpenseRow = {
   amount: number;
   currency: string;
   recurrenceFrequency: RecurrenceFrequency;
+  occurrenceCount: number | null;
+  startsAt: string;
 };
 
 type FixedExpenseFormProps = {
@@ -65,6 +73,9 @@ const defaultValues: RecurringExpenseFormValues = {
   category: "HOUSING",
   currency: "MAD",
   recurrenceFrequency: "MONTHLY",
+  endsMode: "indefinite",
+  occurrenceCount: null,
+  startsAt: normalizeDateToLocalNoon(new Date()),
 };
 
 export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
@@ -74,13 +85,16 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
     resolver: zodResolver(recurringExpenseFormSchema) as Resolver<RecurringExpenseFormValues>,
     defaultValues: { ...defaultValues, currency },
   });
+  const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
+  const recurrenceFrequency =
+    useWatch({ control: form.control, name: "recurrenceFrequency" }) ?? "MONTHLY";
 
   function onSubmit(values: RecurringExpenseFormValues) {
     startTransition(async () => {
       const res = await createRecurringExpense({ ...values, currency });
       if (res.ok) {
         toast.success("Recurring expense added");
-        form.reset({ ...defaultValues, currency });
+        form.reset({ ...defaultValues, currency, startsAt: normalizeDateToLocalNoon(new Date()) });
         router.refresh();
       } else {
         toast.error(res.error);
@@ -109,6 +123,8 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
         ) : null}
       </div>
 
+      <RecurringStartsAtField control={form.control} name="startsAt" id="re-exp-starts" />
+
       <div className="space-y-2">
         <Label htmlFor="re-exp-freq">Recurrence</Label>
         <Controller
@@ -129,6 +145,24 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
           )}
         />
       </div>
+
+      <RecurringEndsFields
+        control={form.control}
+        endsMode={endsMode}
+        endsModeName="endsMode"
+        occurrenceCountName="occurrenceCount"
+        idPrefix="re-exp"
+        frequency={recurrenceFrequency}
+        error={form.formState.errors.occurrenceCount?.message}
+        onEndsModeChange={(mode) => {
+          if (mode === "limited" && !form.getValues("occurrenceCount")) {
+            form.setValue("occurrenceCount", 2);
+          }
+          if (mode === "indefinite") {
+            form.setValue("occurrenceCount", null);
+          }
+        }}
+      />
 
       <div className="space-y-2 sm:col-span-2">
         <Label htmlFor="re-exp-desc">Description (optional)</Label>
@@ -190,6 +224,7 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
   const [editRow, setEditRow] = useState<RecurringExpenseRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const ends = fromOccurrenceCount(editRow?.occurrenceCount);
   const form = useForm<RecurringExpenseFormValues>({
     resolver: zodResolver(recurringExpenseFormSchema) as Resolver<RecurringExpenseFormValues>,
     values: editRow
@@ -199,9 +234,15 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
           category: editRow.category,
           currency: editRow.currency || currency,
           recurrenceFrequency: editRow.recurrenceFrequency,
+          endsMode: ends.endsMode,
+          occurrenceCount: ends.occurrenceCount,
+          startsAt: normalizeDateToLocalNoon(new Date(editRow.startsAt)),
         }
       : { ...defaultValues, currency },
   });
+  const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
+  const editFrequency =
+    useWatch({ control: form.control, name: "recurrenceFrequency" }) ?? "MONTHLY";
 
   function onSaveEdit(values: RecurringExpenseFormValues) {
     if (!editRow) return;
@@ -242,7 +283,9 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
           <tr className="border-b border-border text-muted-foreground">
             <th className="pb-2 pr-3 font-medium">Description</th>
             <th className="pb-2 pr-3 font-medium whitespace-nowrap">Category</th>
+            <th className="pb-2 pr-3 font-medium whitespace-nowrap">Start</th>
             <th className="pb-2 pr-3 font-medium whitespace-nowrap">Recurrence</th>
+            <th className="pb-2 pr-3 font-medium whitespace-nowrap">Ends</th>
             <th className="pb-2 pr-3 font-medium whitespace-nowrap text-right">Amount</th>
             <th className="pb-2 font-medium whitespace-nowrap">Actions</th>
           </tr>
@@ -261,8 +304,14 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
                     {cfg.label}
                   </span>
                 </td>
+                <td className="py-2.5 pr-3 text-muted-foreground whitespace-nowrap">
+                  {format(new Date(row.startsAt), "MMM d, yyyy")}
+                </td>
                 <td className="py-2.5 pr-3 capitalize text-muted-foreground whitespace-nowrap">
                   {row.recurrenceFrequency.toLowerCase()}
+                </td>
+                <td className="py-2.5 pr-3 text-muted-foreground whitespace-nowrap">
+                  {formatOccurrenceEnds(row.occurrenceCount, row.recurrenceFrequency)}
                 </td>
                 <td className="py-2.5 pr-3 text-right font-medium tabular-nums whitespace-nowrap">
                   {formatMoney(row.amount, row.currency || currency)}
@@ -293,6 +342,23 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t border-border dark:border-zinc-700">
+            <td
+              colSpan={5}
+              className="pt-3 pr-3 text-sm font-medium text-muted-foreground"
+            >
+              Total ({rows.length})
+            </td>
+            <td className="pt-3 pr-3 text-right text-sm font-semibold tabular-nums whitespace-nowrap">
+              {formatMoney(
+                rows.reduce((sum, row) => sum + row.amount, 0),
+                currency,
+              )}
+            </td>
+            <td className="pt-3" />
+          </tr>
+        </tfoot>
       </table>
 
       <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
@@ -305,6 +371,7 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
               <Label>Amount</Label>
               <Input type="number" step="0.01" {...form.register("amount", { valueAsNumber: true })} />
             </div>
+            <RecurringStartsAtField control={form.control} name="startsAt" id="edit-exp-starts" />
             <div className="space-y-2">
               <Label>Description</Label>
               <Input {...form.register("description")} />
@@ -348,6 +415,25 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
                     </SelectContent>
                   </Select>
                 )}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <RecurringEndsFields
+                control={form.control}
+                endsMode={endsMode}
+                endsModeName="endsMode"
+                occurrenceCountName="occurrenceCount"
+                idPrefix="edit-exp"
+                frequency={editFrequency}
+                error={form.formState.errors.occurrenceCount?.message}
+                onEndsModeChange={(mode) => {
+                  if (mode === "limited" && !form.getValues("occurrenceCount")) {
+                    form.setValue("occurrenceCount", 2);
+                  }
+                  if (mode === "indefinite") {
+                    form.setValue("occurrenceCount", null);
+                  }
+                }}
               />
             </div>
             <DialogFooter>

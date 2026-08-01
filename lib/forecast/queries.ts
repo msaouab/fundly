@@ -9,6 +9,7 @@ import type {
 } from "@/lib/forecast/types";
 import type { ExpenseCategory, IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
+import { deleteExpiredRecurringTemplates } from "@/lib/recurring/expire";
 
 const LOOKBACK_MONTHS = 3;
 
@@ -16,6 +17,8 @@ export async function fetchForecastBaseline(
   userId: string,
   horizon: ForecastHorizon = 6,
 ): Promise<ForecastBaseline> {
+  await deleteExpiredRecurringTemplates(userId);
+
   const now = new Date();
   const thisYear = now.getFullYear();
   const thisMonth = now.getMonth() + 1;
@@ -38,6 +41,8 @@ export async function fetchForecastBaseline(
         amount: true,
         currency: true,
         recurrenceFrequency: true,
+        occurrenceCount: true,
+        startsAt: true,
       },
     }),
     prisma.recurringExpense.findMany({
@@ -48,6 +53,8 @@ export async function fetchForecastBaseline(
         amount: true,
         currency: true,
         recurrenceFrequency: true,
+        occurrenceCount: true,
+        startsAt: true,
       },
     }),
     prisma.expense.findMany({
@@ -78,6 +85,8 @@ export async function fetchForecastBaseline(
     amount: Number(r.amount),
     recurrenceFrequency: r.recurrenceFrequency as RecurrenceFrequency,
     anchorMonth: thisMonth,
+    occurrenceCount: r.occurrenceCount,
+    startsAt: r.startsAt,
   }));
 
   const fixedExpenses: ForecastTemplateExpense[] = expenseTemplates.map((r) => {
@@ -92,6 +101,8 @@ export async function fetchForecastBaseline(
       amount: Number(r.amount),
       recurrenceFrequency: r.recurrenceFrequency as RecurrenceFrequency,
       anchorMonth: thisMonth,
+      occurrenceCount: r.occurrenceCount,
+      startsAt: r.startsAt,
     };
   });
 

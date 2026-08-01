@@ -8,8 +8,37 @@ import {
   previousPeriod,
   type DatePeriod,
 } from "@/lib/period";
+import { isRecurringActiveInMonth } from "@/lib/recurring/occurrence";
+import { deleteExpiredRecurringTemplates } from "@/lib/recurring/expire";
+import { recurringTemplatePeriodTotal } from "@/lib/recurring/project";
 import { trimEmptyFlowMonths } from "@/lib/charts/trim-flow-series";
 import type { DashboardData, MonthlyFlowPoint } from "./types";
+
+type AmountTemplate = {
+  amount: { toString(): string } | number;
+  occurrenceCount: number | null;
+  startsAt: Date;
+  recurrenceFrequency?: string | null;
+};
+
+function templateAmountInMonth(templates: AmountTemplate[], year: number, month: number): number {
+  let sum = 0;
+  for (const t of templates) {
+    if (
+      !isRecurringActiveInMonth(
+        t.startsAt,
+        t.occurrenceCount,
+        year,
+        month,
+        t.recurrenceFrequency,
+      )
+    ) {
+      continue;
+    }
+    sum += Number(t.amount);
+  }
+  return sum;
+}
 
 async function fetchFlowSeriesForRange(
   userId: string,
@@ -20,21 +49,13 @@ async function fetchFlowSeriesForRange(
   const [incomeTemplates, expenseTemplates] = await Promise.all([
     prisma.recurringIncome.findMany({
       where: { userId },
-      select: { amount: true },
+      select: { amount: true, occurrenceCount: true, startsAt: true, recurrenceFrequency: true },
     }),
     prisma.recurringExpense.findMany({
       where: { userId },
-      select: { amount: true },
+      select: { amount: true, occurrenceCount: true, startsAt: true, recurrenceFrequency: true },
     }),
   ]);
-  const recurringIncomePerMonth = incomeTemplates.reduce(
-    (s, t) => s + Number(t.amount),
-    0,
-  );
-  const recurringExpensePerMonth = expenseTemplates.reduce(
-    (s, t) => s + Number(t.amount),
-    0,
-  );
 
   const series = await Promise.all(
     buckets.map(async (b) => {
@@ -49,8 +70,12 @@ async function fetchFlowSeriesForRange(
           _sum: { amount: true },
         }),
       ]);
-      const income = Number(incomeAgg._sum.amount ?? 0) + recurringIncomePerMonth;
-      const expense = Number(expenseAgg._sum.amount ?? 0) + recurringExpensePerMonth;
+      const income =
+        Number(incomeAgg._sum.amount ?? 0) +
+        templateAmountInMonth(incomeTemplates, b.year, b.month);
+      const expense =
+        Number(expenseAgg._sum.amount ?? 0) +
+        templateAmountInMonth(expenseTemplates, b.year, b.month);
       const { savings } = computeCashflow(income, expense);
       return {
         monthKey: b.monthKey,
@@ -71,8 +96,6 @@ async function fetchPeriodSavings(
   end: Date,
 ): Promise<number> {
   const range = { start, end };
-  const buckets = listMonthBucketsInRange(start, end, 120);
-  const monthCount = buckets.length;
 
   const [incomeAgg, expenseAgg, incomeTemplates, expenseTemplates] = await Promise.all([
     prisma.income.aggregate({
@@ -85,20 +108,35 @@ async function fetchPeriodSavings(
     }),
     prisma.recurringIncome.findMany({
       where: { userId },
-      select: { amount: true },
+      select: { amount: true, occurrenceCount: true, startsAt: true, recurrenceFrequency: true },
     }),
     prisma.recurringExpense.findMany({
       where: { userId },
-      select: { amount: true },
+      select: { amount: true, occurrenceCount: true, startsAt: true, recurrenceFrequency: true },
     }),
   ]);
   const income =
     Number(incomeAgg._sum.amount ?? 0) +
-    incomeTemplates.reduce((s, t) => s + Number(t.amount), 0) * monthCount;
+    recurringTemplatePeriodTotal(
+      incomeTemplates.map((t) => ({
+        amount: Number(t.amount),
+        occurrenceCount: t.occurrenceCount,
+        startsAt: t.startsAt,
+        recurrenceFrequency: t.recurrenceFrequency,
+      })),
+      range,
+    );
   const expense =
     Number(expenseAgg._sum.amount ?? 0) +
-    expenseTemplates.reduce((s, t) => s + Number(t.amount), 0) * monthCount;
-  void range;
+    recurringTemplatePeriodTotal(
+      expenseTemplates.map((t) => ({
+        amount: Number(t.amount),
+        occurrenceCount: t.occurrenceCount,
+        startsAt: t.startsAt,
+        recurrenceFrequency: t.recurrenceFrequency,
+      })),
+      range,
+    );
   return computeCashflow(income, expense).savings;
 }
 
@@ -119,6 +157,8 @@ export async function fetchDashboardData(
   userId: string,
   period: DatePeriod,
 ): Promise<DashboardData> {
+  await deleteExpiredRecurringTemplates(userId);
+
   const range = { start: period.start, end: period.end };
   const prev = previousPeriod(period);
 

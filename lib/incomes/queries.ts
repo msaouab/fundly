@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeCashflow } from "@/lib/cashflow";
 import { listMonthBucketsInRange, type PeriodRange } from "@/lib/period";
+import { deleteExpiredRecurringTemplates } from "@/lib/recurring/expire";
 import {
   projectRecurringIncomeRows,
   recurringTemplatePeriodTotal,
@@ -33,6 +34,8 @@ export async function fetchIncomesPageData(
   summary: MonthSummary;
   currency: string;
 }> {
+  await deleteExpiredRecurringTemplates(userId);
+
   const dateFilter = { date: { gte: range.start, lte: range.end } };
   const buckets = listMonthBucketsInRange(range.start, range.end, 120);
   const years = [...new Set(buckets.map((b) => b.year))];
@@ -50,7 +53,7 @@ export async function fetchIncomesPageData(
       }),
       prisma.recurringExpense.findMany({
         where: { userId },
-        select: { amount: true },
+        select: { amount: true, occurrenceCount: true, startsAt: true, recurrenceFrequency: true },
       }),
       prisma.recurringIncome.findMany({
         where: { userId },
@@ -71,7 +74,12 @@ export async function fetchIncomesPageData(
 
   const variableIncomeSum = incomeRows.reduce((s, r) => s + Number(r.amount), 0);
   const recurringIncomeTotal = recurringTemplatePeriodTotal(
-    incomeTemplates.map((t) => Number(t.amount)),
+    incomeTemplates.map((t) => ({
+      amount: Number(t.amount),
+      occurrenceCount: t.occurrenceCount,
+      startsAt: t.startsAt,
+      recurrenceFrequency: t.recurrenceFrequency,
+    })),
     range,
   );
   const total = variableIncomeSum + recurringIncomeTotal;
@@ -111,7 +119,12 @@ export async function fetchIncomesPageData(
 
   const variableExpenses = Number(expenseAgg._sum.amount ?? 0);
   const recurringExpenses = recurringTemplatePeriodTotal(
-    expenseTemplates.map((t) => Number(t.amount)),
+    expenseTemplates.map((t) => ({
+      amount: Number(t.amount),
+      occurrenceCount: t.occurrenceCount,
+      startsAt: t.startsAt,
+      recurrenceFrequency: t.recurrenceFrequency,
+    })),
     range,
   );
   const totalExpenses = variableExpenses + recurringExpenses;

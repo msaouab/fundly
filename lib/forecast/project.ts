@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { computeCashflow } from "@/lib/cashflow";
 import { addMonths, formatMonthKey } from "@/lib/month";
+import { isRecurringActiveInMonth } from "@/lib/recurring/occurrence";
 import type { RecurrenceFrequency } from "@/generated/prisma/enums";
 import type {
   ForecastBaseline,
@@ -43,6 +44,9 @@ function buildMonthLines(
   const lines: ForecastLine[] = [];
 
   for (const inc of incomes) {
+    if (!isRecurringActiveInMonth(inc.startsAt, inc.occurrenceCount, year, month, inc.recurrenceFrequency)) {
+      continue;
+    }
     const amt = amountForMonth(
       inc.amount,
       inc.recurrenceFrequency,
@@ -61,6 +65,9 @@ function buildMonthLines(
   }
 
   for (const exp of fixedExpenses) {
+    if (!isRecurringActiveInMonth(exp.startsAt, exp.occurrenceCount, year, month, exp.recurrenceFrequency)) {
+      continue;
+    }
     const amt = amountForMonth(
       exp.amount,
       exp.recurrenceFrequency,

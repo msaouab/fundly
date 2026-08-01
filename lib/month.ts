@@ -40,6 +40,16 @@ export function addMonths(year: number, month: number, delta: number): { year: n
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
+/** Signed month offset from (fromYear, fromMonth) to (toYear, toMonth). Same month → 0. */
+export function monthsBetween(
+  fromYear: number,
+  fromMonth: number,
+  toYear: number,
+  toMonth: number,
+): number {
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
+}
+
 export type MonthNavYearGroup = {
   year: number;
   months: { key: string; label: string }[];

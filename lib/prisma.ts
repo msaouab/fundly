@@ -13,7 +13,7 @@ const globalForPrisma = globalThis as unknown as {
  * `new PrismaClient({ ... })` option change (e.g. `log`) — otherwise dev HMR keeps
  * the old instance and old logging behavior forever.
  */
-const PRISMA_CLIENT_CACHE_REVISION = 7;
+const PRISMA_CLIENT_CACHE_REVISION = 11;
 
 function createClient() {
   const raw = process.env.DATABASE_URL;

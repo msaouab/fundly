@@ -37,6 +37,8 @@ export type ForecastTemplateIncome = {
   recurrenceFrequency: RecurrenceFrequency | null;
   /** Month (1–12) of last occurrence — used for YEARLY cadence. */
   anchorMonth: number;
+  occurrenceCount: number | null;
+  startsAt: Date;
 };
 
 export type ForecastTemplateExpense = {
@@ -46,6 +48,8 @@ export type ForecastTemplateExpense = {
   amount: number;
   recurrenceFrequency: RecurrenceFrequency | null;
   anchorMonth: number;
+  occurrenceCount: number | null;
+  startsAt: Date;
 };
 
 export type ForecastBaseline = {

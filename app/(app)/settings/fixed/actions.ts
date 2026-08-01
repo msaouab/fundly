@@ -12,12 +12,14 @@ import {
 } from "@/lib/server/actions";
 import { revalidatePath } from "next/cache";
 import type { ExpenseCategory, IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
+import { normalizeDateToLocalNoon } from "@/lib/date";
 import {
   recurringExpenseEditSchema,
   recurringExpenseFormSchema,
   recurringIncomeEditSchema,
   recurringIncomeFormSchema,
   recurringPaidSchema,
+  toOccurrenceCount,
 } from "./schema";
 
 function revalidateRecurring() {
@@ -39,6 +41,8 @@ export async function createRecurringExpense(input: unknown): Promise<ActionResu
         amount: d.amount,
         currency: d.currency,
         recurrenceFrequency: d.recurrenceFrequency as RecurrenceFrequency,
+        occurrenceCount: toOccurrenceCount(d.endsMode, d.occurrenceCount),
+        startsAt: normalizeDateToLocalNoon(d.startsAt),
       },
       select: { id: true },
     });
@@ -66,6 +70,8 @@ export async function updateRecurringExpense(input: unknown): Promise<ActionResu
         amount: d.amount,
         currency: d.currency,
         recurrenceFrequency: d.recurrenceFrequency as RecurrenceFrequency,
+        occurrenceCount: toOccurrenceCount(d.endsMode, d.occurrenceCount),
+        startsAt: normalizeDateToLocalNoon(d.startsAt),
       },
     });
     revalidateRecurring();
@@ -101,6 +107,8 @@ export async function createRecurringIncome(input: unknown): Promise<ActionResul
         amount: d.amount,
         currency: d.currency,
         recurrenceFrequency: d.recurrenceFrequency as RecurrenceFrequency,
+        occurrenceCount: toOccurrenceCount(d.endsMode, d.occurrenceCount),
+        startsAt: normalizeDateToLocalNoon(d.startsAt),
       },
       select: { id: true },
     });
@@ -128,6 +136,8 @@ export async function updateRecurringIncome(input: unknown): Promise<ActionResul
         amount: d.amount,
         currency: d.currency,
         recurrenceFrequency: d.recurrenceFrequency as RecurrenceFrequency,
+        occurrenceCount: toOccurrenceCount(d.endsMode, d.occurrenceCount),
+        startsAt: normalizeDateToLocalNoon(d.startsAt),
       },
     });
     revalidateRecurring();

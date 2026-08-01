@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/money";
+import { deleteExpiredRecurringTemplates } from "@/lib/recurring/expire";
 import type { ExpenseCategory, IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 
 export const metadata: Metadata = {
@@ -35,6 +36,8 @@ export default async function FixedSettingsPage() {
     select: { currency: true },
   });
   const currency = user?.currency ?? "MAD";
+
+  await deleteExpiredRecurringTemplates(userId);
 
   const [incomeTemplates, expenseTemplates] = await Promise.all([
     prisma.recurringIncome.findMany({
@@ -54,6 +57,8 @@ export default async function FixedSettingsPage() {
     amount: Number(row.amount),
     currency: row.currency,
     recurrenceFrequency: row.recurrenceFrequency as RecurrenceFrequency,
+    occurrenceCount: row.occurrenceCount,
+    startsAt: row.startsAt.toISOString(),
   }));
 
   const expenseRows = expenseTemplates.map((row) => ({
@@ -63,6 +68,8 @@ export default async function FixedSettingsPage() {
     amount: Number(row.amount),
     currency: row.currency,
     recurrenceFrequency: row.recurrenceFrequency as RecurrenceFrequency,
+    occurrenceCount: row.occurrenceCount,
+    startsAt: row.startsAt.toISOString(),
   }));
 
   const incomeTotal = incomeRows.reduce((s, r) => s + r.amount, 0);

@@ -6,6 +6,7 @@ import {
   recurringExpenseRowId,
   recurringIncomeRowId,
 } from "@/lib/recurring/ids";
+import { isRecurringActiveInMonth } from "@/lib/recurring/occurrence";
 import type {
   ExpenseCategory,
   IncomeType,
@@ -20,6 +21,8 @@ type ExpenseTemplate = {
   amount: { toString(): string } | number;
   currency: string;
   recurrenceFrequency: RecurrenceFrequency;
+  occurrenceCount: number | null;
+  startsAt: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -32,6 +35,8 @@ type IncomeTemplate = {
   amount: { toString(): string } | number;
   currency: string;
   recurrenceFrequency: RecurrenceFrequency;
+  occurrenceCount: number | null;
+  startsAt: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -67,6 +72,17 @@ export function projectRecurringExpenseRows(
   for (const bucket of buckets) {
     const { start } = monthRangeLocal(bucket.year, bucket.month);
     for (const t of templates) {
+      if (
+        !isRecurringActiveInMonth(
+          t.startsAt,
+          t.occurrenceCount,
+          bucket.year,
+          bucket.month,
+          t.recurrenceFrequency,
+        )
+      ) {
+        continue;
+      }
       const amount = Number(t.amount);
       const payee =
         paidMap.get(`${t.id}:${bucket.year}-${bucket.month}`) ?? false;
@@ -110,6 +126,17 @@ export function projectRecurringIncomeRows(
   for (const bucket of buckets) {
     const { start } = monthRangeLocal(bucket.year, bucket.month);
     for (const t of templates) {
+      if (
+        !isRecurringActiveInMonth(
+          t.startsAt,
+          t.occurrenceCount,
+          bucket.year,
+          bucket.month,
+          t.recurrenceFrequency,
+        )
+      ) {
+        continue;
+      }
       const amount = Number(t.amount);
       const payee =
         paidMap.get(`${t.id}:${bucket.year}-${bucket.month}`) ?? false;
@@ -135,12 +162,33 @@ export function projectRecurringIncomeRows(
   return rows;
 }
 
-/** Sum of template amounts × months overlapping the range. */
+/** Sum of template amounts for months overlapping the range (respects occurrence windows). */
 export function recurringTemplatePeriodTotal(
-  templateAmounts: number[],
+  templates: {
+    amount: number;
+    occurrenceCount: number | null;
+    startsAt: Date;
+    recurrenceFrequency?: RecurrenceFrequency | string | null;
+  }[],
   range: PeriodRange,
 ): number {
-  const monthCount = listMonthBucketsInRange(range.start, range.end, 120).length;
-  const perMonth = templateAmounts.reduce((s, n) => s + n, 0);
-  return perMonth * monthCount;
+  const buckets = listMonthBucketsInRange(range.start, range.end, 120);
+  let total = 0;
+  for (const bucket of buckets) {
+    for (const t of templates) {
+      if (
+        !isRecurringActiveInMonth(
+          t.startsAt,
+          t.occurrenceCount,
+          bucket.year,
+          bucket.month,
+          t.recurrenceFrequency,
+        )
+      ) {
+        continue;
+      }
+      total += t.amount;
+    }
+  }
+  return total;
 }

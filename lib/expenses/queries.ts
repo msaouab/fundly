@@ -2,6 +2,7 @@ import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "@/
 import { computeCashflow } from "@/lib/cashflow";
 import { prisma } from "@/lib/prisma";
 import { listMonthBucketsInRange, type PeriodRange } from "@/lib/period";
+import { deleteExpiredRecurringTemplates } from "@/lib/recurring/expire";
 import {
   projectRecurringExpenseRows,
   recurringTemplatePeriodTotal,
@@ -34,6 +35,8 @@ export async function fetchExpensesPageData(
   summary: ExpenseMonthSummary;
   currency: string;
 }> {
+  await deleteExpiredRecurringTemplates(userId);
+
   const dateFilter = { date: { gte: range.start, lte: range.end } };
   const buckets = listMonthBucketsInRange(range.start, range.end, 120);
   const years = [...new Set(buckets.map((b) => b.year))];
@@ -51,7 +54,7 @@ export async function fetchExpensesPageData(
       }),
       prisma.recurringIncome.findMany({
         where: { userId },
-        select: { amount: true, currency: true },
+        select: { amount: true, occurrenceCount: true, startsAt: true, currency: true, recurrenceFrequency: true },
       }),
       prisma.recurringExpense.findMany({
         where: { userId },
@@ -72,7 +75,12 @@ export async function fetchExpensesPageData(
 
   const variableIncome = Number(incomeAgg._sum.amount ?? 0);
   const recurringIncomeTotal = recurringTemplatePeriodTotal(
-    incomeTemplates.map((t) => Number(t.amount)),
+    incomeTemplates.map((t) => ({
+      amount: Number(t.amount),
+      occurrenceCount: t.occurrenceCount,
+      startsAt: t.startsAt,
+      recurrenceFrequency: t.recurrenceFrequency,
+    })),
     range,
   );
   const totalIncome = variableIncome + recurringIncomeTotal;
