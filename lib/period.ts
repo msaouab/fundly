@@ -3,6 +3,7 @@ import { monthRangeLocal, parseMonthParam } from "@/lib/month";
 
 export type PeriodPreset =
   | "this_month"
+  | "next_month"
   | "last_month"
   | "last_3_months"
   | "last_6_months"
@@ -37,6 +38,7 @@ export type PeriodRange = {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const PERIOD_PRESETS: { id: PeriodPreset; label: string }[] = [
+  { id: "next_month", label: "Next month" },
   { id: "this_month", label: "This month" },
   { id: "last_month", label: "Last month" },
   { id: "last_3_months", label: "Last 3 months" },
@@ -82,13 +84,18 @@ function formatPeriodLabel(start: Date, end: Date): string {
   return `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
 }
 
-function resolvePreset(preset: PeriodPreset, anchor = new Date()): DatePeriod {
+export function resolvePreset(preset: PeriodPreset, anchor = new Date()): DatePeriod {
   const y = anchor.getFullYear();
   const m = anchor.getMonth() + 1;
 
   switch (preset) {
     case "this_month": {
       const { start, end } = monthRangeLocal(y, m);
+      return { preset, start, end, label: formatPeriodLabel(start, end) };
+    }
+    case "next_month": {
+      const next = new Date(y, m, 1);
+      const { start, end } = monthRangeLocal(next.getFullYear(), next.getMonth() + 1);
       return { preset, start, end, label: formatPeriodLabel(start, end) };
     }
     case "last_month": {

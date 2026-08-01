@@ -26,6 +26,12 @@ import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { deleteExpense, deleteExpenses, duplicateExpenses, editExpense } from "../actions";
+import {
+  setRecurringExpensePaid,
+} from "@/app/(app)/settings/fixed/actions";
+import { isRecurringRowId, parseRecurringExpenseRowId } from "@/lib/recurring/ids";
+import { formatRecurrenceFrequency } from "@/lib/recurring/labels";
+import { RecurringPaidToggle } from "@/components/recurring-paid-toggle";
 import { expenseEditFormSchema, type ExpenseEditFormValues } from "../schema";
 import type { ExpenseCategory, ExpenseKind } from "@/generated/prisma/enums";
 import type { ExpenseWithMeta } from "../types";
@@ -84,6 +90,29 @@ import { cn } from "@/lib/utils";
 import { TablePagination } from "@/components/table-pagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { ExpenseTypeToggle } from "./expense-type-toggle";
+
+function ExpensePaidCell({ row }: { row: ExpenseWithMeta }) {
+  const parsed = parseRecurringExpenseRowId(row.id);
+  if (parsed) {
+    return (
+      <RecurringPaidToggle
+        checked={row.payee}
+        onToggle={async (next) => {
+          const res = await setRecurringExpensePaid({
+            templateId: parsed.templateId,
+            year: parsed.year,
+            month: parsed.month,
+            payee: next,
+          });
+          return res.ok ? { ok: true } : { ok: false, error: res.error };
+        }}
+      />
+    );
+  }
+  return (
+    <PayeeYesNo value={row.payee} trueLabel="Paid" falseLabel="Unpaid" />
+  );
+}
 
 const ALL_CATEGORIES: ExpenseCategory[] = EXPENSE_CATEGORY_ORDER;
 
@@ -144,6 +173,7 @@ export function ExpenseTable({
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [bulkDupOpen, setBulkDupOpen] = useState(false);
   const [bulkTargetKey, setBulkTargetKey] = useState<string | null>(null);
+  const [fixedExpanded, setFixedExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const [vy, vm] = monthKey.split("-").map(Number);
@@ -193,7 +223,7 @@ export function ExpenseTable({
       rows = rows.filter(
         (r) =>
           (r.description || "").toLowerCase().includes(debounced) ||
-          (r.payee ? "yes" : "no").includes(debounced),
+          (r.payee ? "paid yes" : "unpaid no").includes(debounced),
       );
     }
     const { key: sortKey, dir: sortDir } = sort;
@@ -227,16 +257,38 @@ export function ExpenseTable({
     allKindsSelected,
   ]);
 
-  const pagination = useTablePagination(filtered.length, {
+  const { fixedRows, variableRows } = useMemo(() => {
+    const fixed: ExpenseWithMeta[] = [];
+    const variable: ExpenseWithMeta[] = [];
+    for (const row of filtered) {
+      if (row.kind === "FIXED") fixed.push(row);
+      else variable.push(row);
+    }
+    return { fixedRows: fixed, variableRows: variable };
+  }, [filtered]);
+
+  const showFixedGroup = fixedRows.length > 0;
+  const fixedTotal = useMemo(
+    () => fixedRows.reduce((sum, row) => sum + row.amount, 0),
+    [fixedRows],
+  );
+  const fixedPaidCount = useMemo(
+    () => fixedRows.reduce((count, row) => (row.payee ? count + 1 : count), 0),
+    [fixedRows],
+  );
+  const fixedShareOfIncome = totalIncome > 0 ? (fixedTotal / totalIncome) * 100 : 0;
+
+  const pagination = useTablePagination(variableRows.length, {
     storageKey: "fundly-expense-table-page-size",
   });
   const { resetPage, setPage, setPageSize, sliceItems, ...paginationMeta } = pagination;
-  const slice = sliceItems(filtered);
-  const visibleSum = slice.reduce((s, r) => s + r.amount, 0);
+  const slice = sliceItems(variableRows);
+  const variableSum = slice.reduce((s, r) => s + r.amount, 0);
+  const visibleSum = (showFixedGroup ? fixedTotal : 0) + variableSum;
   const visibleShareOfIncome =
     totalIncome > 0 ? (visibleSum / totalIncome) * 100 : 0;
 
-  const selectedIds = useMemo(
+  const selectedRowIds = useMemo(
     () =>
       Object.entries(rowSelection)
         .filter(([, v]) => v)
@@ -244,6 +296,18 @@ export function ExpenseTable({
         .filter((id) => !id.startsWith("optimistic-")),
     [rowSelection],
   );
+
+  /** Variable ledger rows only — bulk delete / duplicate cannot target template projections. */
+  const selectedIds = useMemo(
+    () => selectedRowIds.filter((id) => !isRecurringRowId(id)),
+    [selectedRowIds],
+  );
+
+  const selectedTotal = useMemo(() => {
+    if (selectedRowIds.length === 0) return 0;
+    const idSet = new Set(selectedRowIds);
+    return expenses.reduce((sum, row) => (idSet.has(row.id) ? sum + row.amount : sum), 0);
+  }, [expenses, selectedRowIds]);
 
   const toggleSort = useCallback((column: SortKey) => {
     dispatchSort(column);
@@ -286,9 +350,27 @@ export function ExpenseTable({
     });
   }
 
+  function toggleFixedGroup(checked: boolean) {
+    setRowSelection((s) => {
+      const next = { ...s };
+      for (const r of fixedRows) {
+        if (!r.id.startsWith("optimistic-")) next[r.id] = checked;
+      }
+      return next;
+    });
+  }
+
   const pageSelectableIds = slice.filter((r) => !r.id.startsWith("optimistic-")).map((r) => r.id);
   const allPageSelected =
     pageSelectableIds.length > 0 && pageSelectableIds.every((id) => rowSelection[id]);
+
+  const fixedSelectableIds = fixedRows
+    .filter((r) => !r.id.startsWith("optimistic-"))
+    .map((r) => r.id);
+  const allFixedSelected =
+    fixedSelectableIds.length > 0 && fixedSelectableIds.every((id) => rowSelection[id]);
+  const someFixedSelected =
+    fixedSelectableIds.some((id) => rowSelection[id]) && !allFixedSelected;
 
   function onDeleteConfirmed() {
     if (!deleteRow) return;
@@ -343,178 +425,193 @@ export function ExpenseTable({
 
   return (
     <div className="w-full min-w-0 space-y-4 rounded-xl border border-border bg-background p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-col gap-3">
-        <Input
-          id={searchInputId}
-          name="expenseSearch"
-          placeholder="Search description or payee…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            resetPage();
-          }}
-          className="w-full sm:max-w-md dark:border-zinc-700"
-        />
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Popover open={kindFilterOpen} onOpenChange={setKindFilterOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full justify-between gap-2 sm:w-[min(100%,280px)] dark:border-zinc-700"
-                aria-expanded={kindFilterOpen}
-                aria-haspopup="dialog"
-              >
-                <span className="truncate text-left font-normal text-muted-foreground">
-                  Kind:{" "}
-                  <span className="font-medium text-foreground">{kindFilterSummary}</span>
-                </span>
-                <ChevronDown className="size-4 shrink-0 opacity-60" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0" align="start">
-              <div className="border-b border-border px-3 py-2 dark:border-zinc-800">
-                <p className="text-sm font-medium text-foreground">Expense kind</p>
-                <p className="text-xs text-muted-foreground">
-                  Show rows matching any selected kind.
+      <div className="rounded-lg border border-border bg-muted/30 p-3 dark:border-zinc-800 dark:bg-zinc-800/30">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row">
+            <Input
+              id={searchInputId}
+              name="expenseSearch"
+              placeholder="Search description or payee…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                resetPage();
+              }}
+              className="w-full sm:max-w-md dark:border-zinc-700"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap">
+              <Popover open={kindFilterOpen} onOpenChange={setKindFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-between gap-2 bg-background sm:w-[min(100%,280px)] dark:border-zinc-700"
+                    aria-expanded={kindFilterOpen}
+                    aria-haspopup="dialog"
+                  >
+                    <span className="truncate text-left font-normal text-muted-foreground">
+                      Kind:{" "}
+                      <span className="font-medium text-foreground">{kindFilterSummary}</span>
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <div className="border-b border-border px-3 py-2 dark:border-zinc-800">
+                    <p className="text-sm font-medium text-foreground">Expense kind</p>
+                    <p className="text-xs text-muted-foreground">
+                      Show rows matching any selected kind.
+                    </p>
+                  </div>
+                  <ul className="space-y-1 p-2">
+                    {ALL_KINDS.map((k) => (
+                      <li key={k}>
+                        <label
+                          htmlFor={`kind-filter-${k}`}
+                          className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/80 dark:hover:bg-zinc-800/80"
+                        >
+                          <Checkbox
+                            id={`kind-filter-${k}`}
+                            checked={selectedKinds.has(k)}
+                            onCheckedChange={(c) => setKindChecked(k, c === true)}
+                          />
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "font-normal",
+                              k === "FIXED"
+                                ? "border-primary/45 text-primary dark:border-primary/50"
+                                : "border-border text-muted-foreground dark:border-zinc-600",
+                            )}
+                          >
+                            {kindLabel(k)}
+                          </Badge>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex gap-2 border-t border-border p-2 dark:border-zinc-800">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedKinds(new Set(ALL_KINDS));
+                        resetPage();
+                      }}
+                    >
+                      Select all
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Popover open={categoryFilterOpen} onOpenChange={setCategoryFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-between gap-2 bg-background sm:w-[min(100%,320px)] dark:border-zinc-700"
+                    aria-expanded={categoryFilterOpen}
+                    aria-haspopup="dialog"
+                  >
+                    <span className="truncate text-left font-normal text-muted-foreground">
+                      Categories:{" "}
+                      <span className="font-medium text-foreground">{categoryFilterSummary}</span>
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <div className="border-b border-border px-3 py-2 dark:border-zinc-800">
+                    <p className="text-sm font-medium text-foreground">Categories</p>
+                    <p className="text-xs text-muted-foreground">
+                      Show rows matching any selected category.
+                    </p>
+                  </div>
+                  <ul className="max-h-64 space-y-1 overflow-y-auto p-2">
+                    {ALL_CATEGORIES.map((c) => {
+                      const cfg = CATEGORY_CONFIG[c];
+                      return (
+                        <li key={c}>
+                          <label
+                            htmlFor={`cat-filter-${c}`}
+                            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/80 dark:hover:bg-zinc-800/80"
+                          >
+                            <Checkbox
+                              id={`cat-filter-${c}`}
+                              checked={selectedCategories.has(c)}
+                              onCheckedChange={(v) => setCategoryChecked(c, v === true)}
+                            />
+                            <span className="text-base" aria-hidden>
+                              {cfg.icon}
+                            </span>
+                            <span>{cfg.label}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="flex gap-2 border-t border-border p-2 dark:border-zinc-800">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedCategories(new Set(ALL_CATEGORIES));
+                        resetPage();
+                      }}
+                    >
+                      Select all
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {selectedRowIds.length > 0 ? (
+            <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm lg:min-w-72 dark:border-zinc-700 dark:bg-zinc-900/80">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">{selectedRowIds.length}</span> selected
+                </p>
+                <p className="text-sm font-semibold tabular-nums text-foreground">
+                  {formatMoney(selectedTotal, currency)}
                 </p>
               </div>
-              <ul className="space-y-1 p-2">
-                {ALL_KINDS.map((k) => (
-                  <li key={k}>
-                    <label
-                      htmlFor={`kind-filter-${k}`}
-                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/80 dark:hover:bg-zinc-800/80"
-                    >
-                      <Checkbox
-                        id={`kind-filter-${k}`}
-                        checked={selectedKinds.has(k)}
-                        onCheckedChange={(c) => setKindChecked(k, c === true)}
-                      />
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "font-normal",
-                          k === "FIXED"
-                            ? "border-primary/45 text-primary dark:border-primary/50"
-                            : "border-border text-muted-foreground dark:border-zinc-600",
-                        )}
-                      >
-                        {kindLabel(k)}
-                      </Badge>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex gap-2 border-t border-border p-2 dark:border-zinc-800">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => {
-                    setSelectedKinds(new Set(ALL_KINDS));
-                    resetPage();
-                  }}
+                  variant="outline"
+                  disabled={selectedIds.length === 0}
+                  onClick={openBulkDuplicate}
                 >
-                  Select all
+                  <Copy className="mr-1 size-4" />
+                  Duplicate
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={pending || selectedIds.length === 0}
+                  onClick={bulkDelete}
+                >
+                  <Trash2 className="mr-1 size-4" />
+                  Delete
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setRowSelection({})}>
+                  Clear
                 </Button>
               </div>
-            </PopoverContent>
-          </Popover>
-          <Popover open={categoryFilterOpen} onOpenChange={setCategoryFilterOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full justify-between gap-2 sm:w-[min(100%,320px)] dark:border-zinc-700"
-              aria-expanded={categoryFilterOpen}
-              aria-haspopup="dialog"
-            >
-              <span className="truncate text-left font-normal text-muted-foreground">
-                Categories:{" "}
-                <span className="font-medium text-foreground">{categoryFilterSummary}</span>
-              </span>
-              <ChevronDown className="size-4 shrink-0 opacity-60" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-0" align="start">
-            <div className="border-b border-border px-3 py-2 dark:border-zinc-800">
-              <p className="text-sm font-medium text-foreground">Categories</p>
-              <p className="text-xs text-muted-foreground">
-                Show rows matching any selected category.
-              </p>
             </div>
-            <ul className="max-h-64 space-y-1 overflow-y-auto p-2">
-              {ALL_CATEGORIES.map((c) => {
-                const cfg = CATEGORY_CONFIG[c];
-                return (
-                  <li key={c}>
-                    <label
-                      htmlFor={`cat-filter-${c}`}
-                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/80 dark:hover:bg-zinc-800/80"
-                    >
-                      <Checkbox
-                        id={`cat-filter-${c}`}
-                        checked={selectedCategories.has(c)}
-                        onCheckedChange={(v) => setCategoryChecked(c, v === true)}
-                      />
-                      <span className="text-base" aria-hidden>
-                        {cfg.icon}
-                      </span>
-                      <span>{cfg.label}</span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="flex gap-2 border-t border-border p-2 dark:border-zinc-800">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="flex-1"
-                onClick={() => {
-                  setSelectedCategories(new Set(ALL_CATEGORIES));
-                  resetPage();
-                }}
-              >
-                Select all
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+          ) : null}
         </div>
       </div>
-
-      {selectedIds.length > 0 ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-800/40">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{selectedIds.length}</span> selected
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={openBulkDuplicate}>
-              <Copy className="mr-1 size-4" />
-              Duplicate
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={pending}
-              onClick={bulkDelete}
-            >
-              <Trash2 className="mr-1 size-4" />
-              Delete
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setRowSelection({})}>
-              Clear
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -545,6 +642,129 @@ export function ExpenseTable({
       ) : (
         <>
           <ul className="space-y-3 md:hidden" aria-label="Expense entries">
+            {showFixedGroup ? (
+              <li className="rounded-lg border border-primary/30 bg-primary/5 p-3 dark:border-primary/35 dark:bg-primary/10">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={
+                      allFixedSelected ? true : someFixedSelected ? "indeterminate" : false
+                    }
+                    onCheckedChange={(c) => toggleFixedGroup(c === true)}
+                    aria-label="Select all fixed expenses"
+                    className="mt-0.5"
+                  />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => setFixedExpanded((v) => !v)}
+                    aria-expanded={fixedExpanded}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 transition-transform",
+                            !fixedExpanded && "-rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                        Fixed expenses
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({fixedRows.length})
+                        </span>
+                      </p>
+                      <p className="shrink-0 text-base font-semibold tabular-nums">
+                        {formatMoney(fixedTotal, currency)}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatPercent(fixedShareOfIncome, 1)} of income
+                      {" · "}
+                      <span
+                        className={
+                          fixedPaidCount > 0
+                            ? "text-emerald-700 dark:text-emerald-300"
+                            : undefined
+                        }
+                      >
+                        {fixedPaidCount}/{fixedRows.length} paid
+                      </span>
+                      {fixedExpanded ? " · tap to collapse" : " · tap to expand"}
+                    </p>
+                  </button>
+                </div>
+                {fixedExpanded ? (
+                  <ul className="mt-3 space-y-2 border-t border-primary/20 pt-3 dark:border-primary/25">
+                    {fixedRows.map((row) => {
+                      const cfg = CATEGORY_CONFIG[row.category];
+                      return (
+                        <li
+                          key={row.id}
+                          className="rounded-md border border-border/60 bg-background/80 p-2.5 dark:border-zinc-700 dark:bg-zinc-950/40"
+                        >
+                          <div className="flex items-start gap-2">
+                            {!row.id.startsWith("optimistic-") ? (
+                              <Checkbox
+                                checked={!!rowSelection[row.id]}
+                                onCheckedChange={(c) => toggleRow(row.id, c === true)}
+                                aria-label={`Select ${row.description?.trim() || "expense"}`}
+                                className="mt-0.5"
+                              />
+                            ) : (
+                              <span className="inline-block w-4 shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                                  {row.description?.trim() || "—"}
+                                </p>
+                                <p className="shrink-0 text-sm font-semibold tabular-nums">
+                                  {formatMoney(row.amount, currency)}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {format(new Date(row.date), "MMM d, yyyy")} · {cfg.icon}{" "}
+                                {cfg.label}
+                              </p>
+                              <div className="mt-2 flex justify-end gap-1">
+                                {row.id.startsWith("optimistic-") ? (
+                                  <span className="text-xs text-muted-foreground">Saving…</span>
+                                ) : isRecurringRowId(row.id) ? (
+                                  <ExpensePaidCell row={row} />
+                                ) : (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8"
+                                      onClick={() => setEditRow(row)}
+                                    >
+                                      <Pencil className="size-4" />
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-destructive"
+                                      onClick={() => setDeleteRow(row)}
+                                    >
+                                      <Trash2 className="size-4" />
+                                      Delete
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </li>
+            ) : null}
             {slice.map((row) => {
               const cfg = CATEGORY_CONFIG[row.category];
               return (
@@ -582,23 +802,19 @@ export function ExpenseTable({
                         </span>
                         <Badge
                           variant="outline"
-                          className={cn(
-                            "font-normal",
-                            row.kind === "FIXED"
-                              ? "border-primary/45 text-primary"
-                              : "border-border text-muted-foreground",
-                          )}
+                          className="border-border font-normal text-muted-foreground"
                         >
-                          {row.kind === "FIXED" ? "Fixed" : "Variable"}
+                          Variable
                         </Badge>
                         <span className="text-muted-foreground">
                           {formatPercent(row.sharePercent, 1)} of income
                         </span>
                       </div>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="text-muted-foreground">Payee</span>
-                          <PayeeYesNo value={row.payee} />
-                        </span>
+                      <PayeeYesNo
+                        value={row.payee}
+                        trueLabel="Paid"
+                        falseLabel="Unpaid"
+                      />
                     </div>
                   </div>
                   <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2 dark:border-zinc-800">
@@ -760,11 +976,205 @@ export function ExpenseTable({
                     </button>
                   </th>
                   <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Recurring</th>
-                  <th className="pb-2 pr-2">Payee</th>
+                  <th className="pb-2 pr-2">Paid</th>
                   <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Actions</th>
                 </tr>
               </thead>
               <tbody>
+                {showFixedGroup ? (
+                  <tr className="border-b border-primary/25 bg-primary/5 dark:border-primary/30 dark:bg-primary/10">
+                    <td className="py-2 pr-2">
+                      <Checkbox
+                        checked={
+                          allFixedSelected ? true : someFixedSelected ? "indeterminate" : false
+                        }
+                        onCheckedChange={(c) => toggleFixedGroup(c === true)}
+                        aria-label="Select all fixed expenses"
+                      />
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-muted-foreground"
+                        onClick={() => setFixedExpanded((v) => !v)}
+                        aria-expanded={fixedExpanded}
+                        aria-label={fixedExpanded ? "Collapse fixed expenses" : "Expand fixed expenses"}
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 transition-transform",
+                            !fixedExpanded && "-rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 font-semibold tabular-nums", ledgerColNowrap)}>
+                      {formatMoney(fixedTotal, currency)}
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                      {formatPercent(fixedShareOfIncome, 1)}
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColPrimaryText)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 font-medium text-foreground"
+                        onClick={() => setFixedExpanded((v) => !v)}
+                        aria-expanded={fixedExpanded}
+                      >
+                        Fixed expenses
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({fixedRows.length})
+                        </span>
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>—</td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <Badge
+                        variant="outline"
+                        className="border-primary/45 text-primary dark:border-primary/50"
+                      >
+                        Fixed
+                      </Badge>
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <Repeat className="size-4 text-primary" aria-label="Recurring group" />
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <span
+                        className={cn(
+                          "inline-flex flex-col gap-0.5 tabular-nums",
+                          fixedPaidCount > 0
+                            ? "font-medium text-emerald-700 dark:text-emerald-300"
+                            : "text-muted-foreground",
+                        )}
+                        title={`${fixedPaidCount} of ${fixedRows.length} marked paid`}
+                      >
+                        <span>
+                          {fixedPaidCount}/{fixedRows.length}
+                        </span>
+                        <span className="text-[10px] font-normal leading-none text-muted-foreground">
+                          paid
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-2" />
+                  </tr>
+                ) : null}
+                {showFixedGroup && fixedExpanded
+                  ? fixedRows.map((row) => {
+                      const cfg = CATEGORY_CONFIG[row.category];
+                      return (
+                        <tr
+                          key={row.id}
+                          className="border-b border-border/60 bg-muted/20 dark:border-zinc-800/60 dark:bg-zinc-900/40"
+                        >
+                          <td className="py-2 pr-2 pl-4">
+                            {row.id.startsWith("optimistic-") ? (
+                              <span className="inline-block w-4" />
+                            ) : (
+                              <Checkbox
+                                checked={!!rowSelection[row.id]}
+                                onCheckedChange={(c) => toggleRow(row.id, c === true)}
+                                aria-label={`Select ${row.description?.trim() || "unnamed expense"}`}
+                              />
+                            )}
+                          </td>
+                          <td
+                            className={cn(
+                              "py-2 pr-2 tabular-nums text-muted-foreground",
+                              ledgerColNowrap,
+                            )}
+                          >
+                            {format(new Date(row.date), "MMM d, yyyy")}
+                          </td>
+                          <td className={cn("py-2 pr-2 font-medium tabular-nums", ledgerColNowrap)}>
+                            {formatMoney(row.amount, currency)}
+                          </td>
+                          <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                            {formatPercent(row.sharePercent, 1)}
+                          </td>
+                          <td
+                            className={cn("py-2 pr-2", ledgerColPrimaryText)}
+                            title={row.description?.trim() || undefined}
+                          >
+                            {row.description?.trim() ? (
+                              row.description
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className={cn("relative z-10 py-2 pr-2", ledgerColNowrap)}>
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                              <span aria-hidden>{cfg.icon}</span>
+                              <span className="text-muted-foreground">{cfg.label}</span>
+                            </span>
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            <Badge
+                              variant="outline"
+                              className="border-primary/45 text-primary dark:border-primary/50"
+                            >
+                              Fixed
+                            </Badge>
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            {row.isRecurring || row.recurrenceFrequency ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Repeat className="size-3.5 shrink-0 text-primary" aria-hidden />
+                                {formatRecurrenceFrequency(row.recurrenceFrequency)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            <ExpensePaidCell row={row} />
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            {row.id.startsWith("optimistic-") ? (
+                              <span className="text-xs text-muted-foreground">Saving…</span>
+                            ) : isRecurringRowId(row.id) ? (
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {formatRecurrenceFrequency(row.recurrenceFrequency)}
+                              </span>
+                            ) : (
+                              <div className="flex flex-nowrap gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Edit expense"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setEditRow(row);
+                                  }}
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0 text-destructive"
+                                  aria-label="Delete expense"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDeleteRow(row);
+                                  }}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  : null}
                 {slice.map((row) => {
                   const cfg = CATEGORY_CONFIG[row.category];
                   return (
@@ -811,24 +1221,16 @@ export function ExpenseTable({
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                         <Badge
                           variant="outline"
-                          className={cn(
-                            row.kind === "FIXED"
-                              ? "border-primary/45 text-primary dark:border-primary/50"
-                              : "border-border text-muted-foreground dark:border-zinc-600",
-                          )}
+                          className="border-border text-muted-foreground dark:border-zinc-600"
                         >
-                          {row.kind === "FIXED" ? "Fixed" : "Variable"}
+                          Variable
                         </Badge>
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                        {row.isRecurring ? (
-                          <Repeat className="size-4 text-primary" aria-label="Recurring" />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        <span className="text-muted-foreground">—</span>
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                        <PayeeYesNo value={row.payee} />
+                        <ExpensePaidCell row={row} />
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                         {row.id.startsWith("optimistic-") ? (
@@ -873,7 +1275,7 @@ export function ExpenseTable({
               <tfoot>
                 <tr className="border-t border-border font-semibold text-foreground dark:border-zinc-800">
                   <td className="pt-3 pr-2" />
-                  <td className="pt-3 pr-2">Page total</td>
+                  <td className="pt-3 pr-2">Total</td>
                   <td className="pt-3 pr-2 tabular-nums">{formatMoney(visibleSum, currency)}</td>
                   <td className="pt-3 pr-2 text-muted-foreground">
                     {formatPercent(visibleShareOfIncome, 1)} of income
@@ -883,16 +1285,18 @@ export function ExpenseTable({
               </tfoot>
             </table>
           </LedgerTableScroll>
-          <TablePagination
-            page={paginationMeta.page}
-            pageCount={paginationMeta.pageCount}
-            pageSize={paginationMeta.pageSize}
-            totalItems={paginationMeta.totalItems}
-            rangeStart={paginationMeta.rangeStart}
-            rangeEnd={paginationMeta.rangeEnd}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
+          {variableRows.length > 0 ? (
+            <TablePagination
+              page={paginationMeta.page}
+              pageCount={paginationMeta.pageCount}
+              pageSize={paginationMeta.pageSize}
+              totalItems={paginationMeta.totalItems}
+              rangeStart={paginationMeta.rangeStart}
+              rangeEnd={paginationMeta.rangeEnd}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          ) : null}
         </>
       )}
 

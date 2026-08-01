@@ -480,6 +480,104 @@ async function main() {
     },
   });
 
+  await prisma.recurringIncome.createMany({
+    data: [
+      {
+        userId: user.id,
+        source: "Acme Corp",
+        type: "SALARY",
+        amount: 18_200,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        source: "Acme Corp (advance)",
+        type: "SALARY",
+        amount: 8_600,
+        currency: CURRENCY,
+        recurrenceFrequency: "BIWEEKLY",
+      },
+      {
+        userId: user.id,
+        source: "Index fund dividends",
+        type: "PASSIVE",
+        amount: 800,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+    ],
+  });
+
+  await prisma.recurringExpense.createMany({
+    data: [
+      {
+        userId: user.id,
+        description: "Rent",
+        category: "HOUSING",
+        amount: 5_500,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Electricity & water",
+        category: "UTILITIES",
+        amount: 450,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Internet",
+        category: "SUBSCRIPTIONS",
+        amount: 350,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Mobile plan",
+        category: "SUBSCRIPTIONS",
+        amount: 199,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Health insurance",
+        category: "HEALTH",
+        amount: 450,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Gym membership",
+        category: "SUBSCRIPTIONS",
+        amount: 299,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "Emergency fund transfer",
+        category: "SAVINGS_CONTRIBUTION",
+        amount: 2_000,
+        currency: CURRENCY,
+        recurrenceFrequency: "MONTHLY",
+      },
+      {
+        userId: user.id,
+        description: "School tuition — Youssef Jr.",
+        category: "EDUCATION",
+        amount: 12_000,
+        currency: CURRENCY,
+        recurrenceFrequency: "YEARLY",
+      },
+    ],
+  });
+
   const incomes: IncomeRow[] = [];
   const expenses: ExpenseRow[] = [];
   let monthIndex = 0;
@@ -504,32 +602,35 @@ async function main() {
     monthIndex += 1;
   }
 
+  const oneOffIncomes = incomes.filter((row) => !row.isRecurring);
+  const variableExpenses = expenses.filter((row) => row.kind === "VARIABLE");
+
   await prisma.income.createMany({
-    data: incomes.map((row) => ({
+    data: oneOffIncomes.map((row) => ({
       userId: user.id,
       source: row.source,
       type: row.type,
       amount: row.amount,
       date: row.date,
       currency: CURRENCY,
-      isRecurring: row.isRecurring ?? false,
-      recurrenceFrequency: row.recurrenceFrequency ?? null,
+      isRecurring: false,
+      recurrenceFrequency: null,
       payee: row.payee ?? false,
       note: row.note ?? null,
     })),
   });
 
   await prisma.expense.createMany({
-    data: expenses.map((row) => ({
+    data: variableExpenses.map((row) => ({
       userId: user.id,
       description: row.description,
-      kind: row.kind,
+      kind: "VARIABLE" as const,
       category: row.category,
       amount: row.amount,
       date: row.date,
       currency: CURRENCY,
-      isRecurring: row.isRecurring ?? false,
-      recurrenceFrequency: row.recurrenceFrequency ?? null,
+      isRecurring: false,
+      recurrenceFrequency: null,
       payee: row.payee ?? false,
       note: row.note ?? null,
     })),
@@ -848,8 +949,51 @@ async function main() {
     },
   });
 
+  const recurringExpenses = await prisma.recurringExpense.findMany({
+    where: { userId: user.id },
+    select: { id: true, description: true },
+  });
+  const recurringIncomes = await prisma.recurringIncome.findMany({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+
+  // Mark common fixed bills paid for the current month
+  const paidDescriptions = new Set([
+    "Rent",
+    "Electricity & water",
+    "Internet",
+    "Mobile plan",
+    "Health insurance",
+    "Gym membership",
+  ]);
+  await prisma.recurringExpenseMonth.createMany({
+    data: recurringExpenses
+      .filter((t) => paidDescriptions.has(t.description))
+      .map((t) => ({
+        recurringExpenseId: t.id,
+        year: endYear,
+        month: endMonth,
+        payee: true,
+      })),
+  });
+  await prisma.recurringIncomeMonth.createMany({
+    data: recurringIncomes.map((t) => ({
+      recurringIncomeId: t.id,
+      year: endYear,
+      month: endMonth,
+      payee: true,
+    })),
+  });
+
   const incomeCount = await prisma.income.count({ where: { userId: user.id } });
   const expenseCount = await prisma.expense.count({ where: { userId: user.id } });
+  const recurringIncomeCount = await prisma.recurringIncome.count({
+    where: { userId: user.id },
+  });
+  const recurringExpenseCount = await prisma.recurringExpense.count({
+    where: { userId: user.id },
+  });
   const goalCount = await prisma.goal.count({ where: { userId: user.id } });
   const eventCount = await prisma.plannedEvent.count({ where: { userId: user.id } });
   const yearlyCount = await prisma.yearlyEvent.count({ where: { userId: user.id } });
@@ -858,14 +1002,16 @@ async function main() {
   console.log(`  Email:       ${DEMO_EMAIL}`);
   console.log(`  Password:    ${DEMO_PASSWORD}`);
   console.log(`  Profile:     ${DEMO_NAME} · ${COUNTRY} · ${CURRENCY}`);
-  console.log(`  Incomes:     ${incomeCount} rows (${MONTHS_OF_HISTORY} months)`);
-  console.log(`  Expenses:    ${expenseCount} rows`);
+  console.log(`  Recurring:   ${recurringIncomeCount} incomes · ${recurringExpenseCount} expenses`);
+  console.log(`  Incomes:     ${incomeCount} one-off rows (${MONTHS_OF_HISTORY} months)`);
+  console.log(`  Expenses:    ${expenseCount} variable rows`);
   console.log(`  Goals:       ${goalCount} (incl. laptop ~95% funded)`);
   console.log(`  Calendar:    ${eventCount} planned · ${yearlyCount} yearly events`);
   console.log("\n  Suggested tour:");
   console.log("  1. Dashboard → try global date filter (Last 3 months)");
   console.log("  2. Savings → compare vs previous period · summer trip goal");
   console.log("  3. Calendar → birthdays this month · Eid overspend · trip at risk");
+  console.log("  4. Account → Recurring → edit templates (always show on Expenses/Incomes)");
   console.log("\n  Log in at /login\n");
 
   await prisma.$disconnect();

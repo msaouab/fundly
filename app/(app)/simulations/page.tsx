@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Simulations are paused until the feature is redesigned. */
+/** Legacy simulations route — redirect to Forecast. */
 export default function SimulationsPage() {
-  redirect("/savings");
+  redirect("/forecast");
 }

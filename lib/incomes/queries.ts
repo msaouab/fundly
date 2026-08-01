@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { computeCashflow } from "@/lib/cashflow";
-import type { PeriodRange } from "@/lib/period";
+import { listMonthBucketsInRange, type PeriodRange } from "@/lib/period";
+import {
+  projectRecurringIncomeRows,
+  recurringTemplatePeriodTotal,
+} from "@/lib/recurring/project";
 import type { IncomeWithMeta, IncomeSource, MonthSummary } from "@/app/(app)/incomes/types";
 import type { IncomeType } from "@/generated/prisma/enums";
 
@@ -30,34 +34,60 @@ export async function fetchIncomesPageData(
   currency: string;
 }> {
   const dateFilter = { date: { gte: range.start, lte: range.end } };
+  const buckets = listMonthBucketsInRange(range.start, range.end, 120);
+  const years = [...new Set(buckets.map((b) => b.year))];
 
-  const [incomeRows, expenseAgg] = await Promise.all([
-    prisma.income.findMany({
-      where: { userId, ...dateFilter },
-      select: incomeSelect,
-      orderBy: { date: "desc" },
-    }),
-    prisma.expense.aggregate({
-      where: { userId, ...dateFilter },
-      _sum: { amount: true },
-    }),
-  ]);
+  const [incomeRows, expenseAgg, expenseTemplates, incomeTemplates, monthPaid] =
+    await Promise.all([
+      prisma.income.findMany({
+        where: { userId, isRecurring: false, ...dateFilter },
+        select: incomeSelect,
+        orderBy: { date: "desc" },
+      }),
+      prisma.expense.aggregate({
+        where: { userId, kind: "VARIABLE", ...dateFilter },
+        _sum: { amount: true },
+      }),
+      prisma.recurringExpense.findMany({
+        where: { userId },
+        select: { amount: true },
+      }),
+      prisma.recurringIncome.findMany({
+        where: { userId },
+      }),
+      prisma.recurringIncomeMonth.findMany({
+        where: {
+          recurringIncome: { userId },
+          year: { in: years.length ? years : [new Date().getFullYear()] },
+        },
+        select: {
+          recurringIncomeId: true,
+          year: true,
+          month: true,
+          payee: true,
+        },
+      }),
+    ]);
 
-  const currency = incomeRows[0]?.currency ?? "MAD";
-  let total = 0;
-  let recurring = 0;
-  for (const r of incomeRows) {
-    const n = Number(r.amount);
-    total += n;
-    if (r.isRecurring) recurring += n;
-  }
-  const variable = Math.max(0, total - recurring);
-  const totalExpenses = Number(expenseAgg._sum.amount ?? 0);
-  const { savings } = computeCashflow(total, totalExpenses);
+  const variableIncomeSum = incomeRows.reduce((s, r) => s + Number(r.amount), 0);
+  const recurringIncomeTotal = recurringTemplatePeriodTotal(
+    incomeTemplates.map((t) => Number(t.amount)),
+    range,
+  );
+  const total = variableIncomeSum + recurringIncomeTotal;
 
-  const incomes: IncomeWithMeta[] = incomeRows.map((r) => {
+  const projected = projectRecurringIncomeRows(
+    incomeTemplates,
+    monthPaid,
+    range,
+    total,
+  );
+
+  const currency =
+    incomeTemplates[0]?.currency ?? incomeRows[0]?.currency ?? "MAD";
+
+  const oneOff: IncomeWithMeta[] = incomeRows.map((r) => {
     const amount = Number(r.amount);
-    const sharePercent = total > 0 ? (amount / total) * 100 : 0;
     return {
       id: r.id,
       userId: r.userId,
@@ -66,30 +96,39 @@ export async function fetchIncomesPageData(
       amount,
       date: r.date.toISOString(),
       currency: r.currency,
-      isRecurring: r.isRecurring,
+      isRecurring: false,
       recurrenceFrequency: r.recurrenceFrequency,
       payee: r.payee,
       note: r.note,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
-      sharePercent,
+      sharePercent: total > 0 ? (amount / total) * 100 : 0,
     };
   });
 
+  const recurring = projected.reduce((s, r) => s + r.amount, 0);
+  const variable = Math.max(0, total - recurring);
+
+  const variableExpenses = Number(expenseAgg._sum.amount ?? 0);
+  const recurringExpenses = recurringTemplatePeriodTotal(
+    expenseTemplates.map((t) => Number(t.amount)),
+    range,
+  );
+  const totalExpenses = variableExpenses + recurringExpenses;
+  const { savings } = computeCashflow(total, totalExpenses);
+
+  const incomes: IncomeWithMeta[] = [...projected, ...oneOff].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+
   const sourceMap = new Map<string, { type: IncomeType; total: number; count: number }>();
-  for (const r of incomeRows) {
-    const key = r.source;
-    const prev = sourceMap.get(key);
-    const amt = Number(r.amount);
+  for (const r of incomes) {
+    const prev = sourceMap.get(r.source);
     if (prev) {
-      prev.total += amt;
+      prev.total += r.amount;
       prev.count += 1;
     } else {
-      sourceMap.set(key, {
-        type: r.type as IncomeType,
-        total: amt,
-        count: 1,
-      });
+      sourceMap.set(r.source, { type: r.type, total: r.amount, count: 1 });
     }
   }
   const sources: IncomeSource[] = [...sourceMap.entries()].map(([name, v]) => ({
@@ -99,13 +138,16 @@ export async function fetchIncomesPageData(
     count: v.count,
   }));
 
-  const summary: MonthSummary = {
-    total,
-    recurring,
-    variable,
-    totalExpenses,
-    savings,
+  return {
+    incomes,
+    sources,
+    summary: {
+      total,
+      recurring,
+      variable,
+      totalExpenses,
+      savings,
+    },
+    currency,
   };
-
-  return { incomes, sources, summary, currency };
 }

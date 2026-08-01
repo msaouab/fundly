@@ -25,6 +25,10 @@ import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { deleteIncome, editIncome } from "../actions";
+import { setRecurringIncomePaid } from "@/app/(app)/settings/fixed/actions";
+import { isRecurringRowId, parseRecurringIncomeRowId } from "@/lib/recurring/ids";
+import { formatRecurrenceFrequency } from "@/lib/recurring/labels";
+import { RecurringPaidToggle } from "@/components/recurring-paid-toggle";
 import {
   incomeEditFormSchema,
   type IncomeEditFormValues,
@@ -67,7 +71,6 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { PayeeSwitchField } from "@/components/payee-switch-field";
-import { PayeeYesNo } from "@/components/payee-yes-no";
 import { Textarea } from "@/components/ui/textarea";
 import { TablePagination } from "@/components/table-pagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
@@ -76,6 +79,25 @@ import { LedgerTableScroll } from "@/components/ledger-table-scroll";
 import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { cn } from "@/lib/utils";
+
+function IncomePaidCell({ row }: { row: IncomeWithMeta }) {
+  const parsed = parseRecurringIncomeRowId(row.id);
+  if (!parsed) return <span className="text-muted-foreground">—</span>;
+  return (
+    <RecurringPaidToggle
+      checked={row.payee}
+      onToggle={async (next) => {
+        const res = await setRecurringIncomePaid({
+          templateId: parsed.templateId,
+          year: parsed.year,
+          month: parsed.month,
+          payee: next,
+        });
+        return res.ok ? { ok: true } : { ok: false, error: res.error };
+      }}
+    />
+  );
+}
 
 const ALL_INCOME_TYPES: IncomeType[] = [
   "SALARY",
@@ -136,6 +158,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
   });
   const [editRow, setEditRow] = useState<IncomeWithMeta | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [recurringExpanded, setRecurringExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -161,8 +184,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
     if (debounced) {
       rows = rows.filter(
         (r) =>
-          r.source.toLowerCase().includes(debounced) ||
-          (r.payee ? "yes" : "no").includes(debounced),
+          r.source.toLowerCase().includes(debounced),
       );
     }
     const { key: sortKey, dir: sortDir } = sort;
@@ -182,15 +204,37 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
     return rows;
   }, [incomes, debounced, selectedTypes, allTypesSelected, sort]);
 
-  const pagination = useTablePagination(filtered.length, {
+  const { recurringRows, oneOffRows } = useMemo(() => {
+    const recurring: IncomeWithMeta[] = [];
+    const oneOff: IncomeWithMeta[] = [];
+    for (const row of filtered) {
+      if (row.isRecurring) recurring.push(row);
+      else oneOff.push(row);
+    }
+    return { recurringRows: recurring, oneOffRows: oneOff };
+  }, [filtered]);
+
+  const showRecurringGroup = recurringRows.length > 0;
+  const recurringTotal = useMemo(
+    () => recurringRows.reduce((sum, row) => sum + row.amount, 0),
+    [recurringRows],
+  );
+  const recurringPaidCount = useMemo(
+    () => recurringRows.reduce((count, row) => (row.payee ? count + 1 : count), 0),
+    [recurringRows],
+  );
+
+  const pagination = useTablePagination(oneOffRows.length, {
     storageKey: "fundly-income-table-page-size",
   });
   const { resetPage, setPage, setPageSize, sliceItems, ...paginationMeta } = pagination;
-  const slice = sliceItems(filtered);
-  const visibleSum = slice.reduce((s, r) => s + r.amount, 0);
+  const slice = sliceItems(oneOffRows);
+  const oneOffSum = slice.reduce((s, r) => s + r.amount, 0);
+  const visibleSum = (showRecurringGroup ? recurringTotal : 0) + oneOffSum;
   const monthTotal = incomes.reduce((s, r) => s + r.amount, 0);
   const visibleShare =
     monthTotal > 0 ? (visibleSum / monthTotal) * 100 : 0;
+  const recurringShare = monthTotal > 0 ? (recurringTotal / monthTotal) * 100 : 0;
 
   const toggleSort = useCallback((column: SortKey) => {
     dispatchSort(column);
@@ -228,7 +272,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
         <Input
           id={searchInputId}
           name="incomeSearch"
-          placeholder="Search source or payee…"
+          placeholder="Search source…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -327,6 +371,99 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
       ) : (
         <>
           <ul className="space-y-3 md:hidden" aria-label="Income entries">
+            {showRecurringGroup ? (
+              <li className="rounded-lg border border-primary/30 bg-primary/5 p-3 dark:border-primary/35 dark:bg-primary/10">
+                <button
+                  type="button"
+                  className="w-full text-left"
+                  onClick={() => setRecurringExpanded((v) => !v)}
+                  aria-expanded={recurringExpanded}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+                      <ChevronDown
+                        className={cn(
+                          "size-4 shrink-0 transition-transform",
+                          !recurringExpanded && "-rotate-90",
+                        )}
+                        aria-hidden
+                      />
+                      Recurring income
+                      <span className="text-xs font-normal text-muted-foreground">
+                        ({recurringRows.length})
+                      </span>
+                    </p>
+                    <p className="shrink-0 text-base font-semibold tabular-nums">
+                      {formatMoney(recurringTotal, currency)}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {formatPercent(recurringShare, 1)} of total
+                    {" · "}
+                    <span
+                      className={
+                        recurringPaidCount > 0
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : undefined
+                      }
+                    >
+                      {recurringPaidCount}/{recurringRows.length} paid
+                    </span>
+                    {recurringExpanded ? " · tap to collapse" : " · tap to expand"}
+                  </p>
+                </button>
+                {recurringExpanded ? (
+                  <ul className="mt-3 space-y-2 border-t border-primary/20 pt-3 dark:border-primary/25">
+                    {recurringRows.map((row) => (
+                      <li
+                        key={row.id}
+                        className="rounded-md border border-border/60 bg-background/80 p-2.5 dark:border-zinc-700 dark:bg-zinc-950/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{row.source}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {format(new Date(row.date), "MMM d, yyyy")} · {row.type}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-sm font-semibold tabular-nums">
+                            {formatMoney(row.amount, currency)}
+                          </p>
+                        </div>
+                        <div className="mt-2 flex justify-end gap-1">
+                          {row.id.startsWith("optimistic-") ? (
+                            <span className="text-xs text-muted-foreground">Saving…</span>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8"
+                                onClick={() => setEditRow(row)}
+                              >
+                                <Pencil className="size-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-destructive"
+                                onClick={() => setDeleteId(row.id)}
+                              >
+                                <Trash2 className="size-4" />
+                                Delete
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ) : null}
             {slice.map((row) => (
               <li
                 key={row.id}
@@ -348,15 +485,6 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                     {row.type}
                   </Badge>
                   <span>{formatPercent(row.sharePercent, 1)} of total</span>
-                  {row.isRecurring ? (
-                    <span className="inline-flex items-center gap-1 text-primary">
-                      <Repeat className="size-3.5" aria-hidden />
-                      Recurring
-                    </span>
-                  ) : null}
-                  <span className="inline-flex items-center gap-1">
-                    Payee <PayeeYesNo value={row.payee} />
-                  </span>
                 </div>
                 {row.note ? (
                   <p className="mt-2 truncate text-xs text-muted-foreground">{row.note}</p>
@@ -474,12 +602,154 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                   </th>
                   <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Type</th>
                   <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Recurring</th>
-                  <th className="pb-2 pr-2">Payee</th>
+                  <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Paid</th>
                   <th className="pb-2 pr-2">Note</th>
                   <th className={cn("pb-2 pr-2", ledgerColNowrap)}>Actions</th>
                 </tr>
               </thead>
               <tbody>
+                {showRecurringGroup ? (
+                  <tr className="border-b border-primary/25 bg-primary/5 dark:border-primary/30 dark:bg-primary/10">
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-muted-foreground"
+                        onClick={() => setRecurringExpanded((v) => !v)}
+                        aria-expanded={recurringExpanded}
+                        aria-label={
+                          recurringExpanded ? "Collapse recurring income" : "Expand recurring income"
+                        }
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 transition-transform",
+                            !recurringExpanded && "-rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 font-semibold tabular-nums", ledgerColNowrap)}>
+                      {formatMoney(recurringTotal, currency)}
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                      {formatPercent(recurringShare, 1)}
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColPrimaryText)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 font-medium text-foreground"
+                        onClick={() => setRecurringExpanded((v) => !v)}
+                        aria-expanded={recurringExpanded}
+                      >
+                        Recurring income
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({recurringRows.length})
+                        </span>
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>—</td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <Repeat className="size-4 text-teal-600 dark:text-teal-400" />
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <span
+                        className={cn(
+                          "inline-flex flex-col gap-0.5 tabular-nums",
+                          recurringPaidCount > 0
+                            ? "font-medium text-emerald-700 dark:text-emerald-300"
+                            : "text-muted-foreground",
+                        )}
+                        title={`${recurringPaidCount} of ${recurringRows.length} marked paid`}
+                      >
+                        <span>
+                          {recurringPaidCount}/{recurringRows.length}
+                        </span>
+                        <span className="text-[10px] font-normal leading-none text-muted-foreground">
+                          paid
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-2 text-muted-foreground">—</td>
+                    <td className="py-2 pr-2" />
+                  </tr>
+                ) : null}
+                {showRecurringGroup && recurringExpanded
+                  ? recurringRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-border/60 bg-muted/20 dark:bg-zinc-900/40"
+                      >
+                        <td
+                          className={cn(
+                            "py-2 pr-2 pl-4 tabular-nums text-muted-foreground",
+                            ledgerColNowrap,
+                          )}
+                        >
+                          {format(new Date(row.date), "MMM d, yyyy")}
+                        </td>
+                        <td className={cn("py-2 pr-2 font-medium tabular-nums", ledgerColNowrap)}>
+                          {formatMoney(row.amount, currency)}
+                        </td>
+                        <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                          {formatPercent(row.sharePercent, 1)}
+                        </td>
+                        <td className={cn("py-2 pr-2", ledgerColPrimaryText)} title={row.source}>
+                          {row.source}
+                        </td>
+                        <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                          <Badge variant={typeBadge(row.type)}>{row.type}</Badge>
+                        </td>
+                        <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Repeat
+                              className="size-3.5 shrink-0 text-teal-600 dark:text-teal-400"
+                              aria-hidden
+                            />
+                            {formatRecurrenceFrequency(row.recurrenceFrequency)}
+                          </span>
+                        </td>
+                        <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                          <IncomePaidCell row={row} />
+                        </td>
+                        <td className="max-w-35 truncate py-2 pr-2 text-muted-foreground">
+                          {row.note ?? "—"}
+                        </td>
+                        <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                          {isRecurringRowId(row.id) ? (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {formatRecurrenceFrequency(row.recurrenceFrequency)}
+                            </span>
+                          ) : row.id.startsWith("optimistic-") ? (
+                            <span className="text-xs text-muted-foreground">Saving…</span>
+                          ) : (
+                            <div className="flex flex-nowrap gap-1">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 shrink-0"
+                                aria-label="Edit income"
+                                onClick={() => setEditRow(row)}
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 shrink-0 text-destructive"
+                                aria-label="Delete income"
+                                onClick={() => setDeleteId(row.id)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  : null}
                 {slice.map((row) => (
                   <tr
                     key={row.id}
@@ -501,16 +771,12 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                       <Badge variant={typeBadge(row.type)}>{row.type}</Badge>
                     </td>
                     <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                      {row.isRecurring ? (
-                        <Repeat className="size-4 text-teal-600 dark:text-teal-400" />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      <span className="text-muted-foreground">—</span>
                     </td>
                     <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                      <PayeeYesNo value={row.payee} />
+                      <IncomePaidCell row={row} />
                     </td>
-                    <td className="max-w-[140px] truncate py-2 pr-2 text-muted-foreground">
+                    <td className="max-w-35 truncate py-2 pr-2 text-muted-foreground">
                       {row.note ?? "—"}
                     </td>
                     <td className={cn("py-2 pr-2", ledgerColNowrap)}>
@@ -546,29 +812,30 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
               </tbody>
               <tfoot>
                 <tr className="border-t border-border font-semibold text-foreground">
-                  <td className="pt-3 pr-2">Page total</td>
+                  <td className="pt-3 pr-2">Total</td>
                   <td className="pt-3 pr-2 tabular-nums">
                     {formatMoney(visibleSum, currency)}
                   </td>
                   <td className="pt-3 pr-2 text-muted-foreground">
                     {formatPercent(visibleShare, 1)}
                   </td>
-                  <td className="pt-3 pr-2" colSpan={5} />
-                  <td className="pt-3 pr-2" />
+                  <td className="pt-3 pr-2" colSpan={6} />
                 </tr>
               </tfoot>
             </table>
           </LedgerTableScroll>
-          <TablePagination
-            page={paginationMeta.page}
-            pageCount={paginationMeta.pageCount}
-            pageSize={paginationMeta.pageSize}
-            totalItems={paginationMeta.totalItems}
-            rangeStart={paginationMeta.rangeStart}
-            rangeEnd={paginationMeta.rangeEnd}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
+          {oneOffRows.length > 0 ? (
+            <TablePagination
+              page={paginationMeta.page}
+              pageCount={paginationMeta.pageCount}
+              pageSize={paginationMeta.pageSize}
+              totalItems={paginationMeta.totalItems}
+              rangeStart={paginationMeta.rangeStart}
+              rangeEnd={paginationMeta.rangeEnd}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          ) : null}
         </>
       )}
 

@@ -175,7 +175,6 @@ export async function duplicateIncomes(
         currency: true,
         isRecurring: true,
         recurrenceFrequency: true,
-        payee: true,
         note: true,
       },
     });
@@ -191,7 +190,8 @@ export async function duplicateIncomes(
       currency: row.currency,
       isRecurring: row.isRecurring,
       recurrenceFrequency: row.recurrenceFrequency,
-      payee: row.payee,
+      // Paid is month-specific — start unpaid in the target month.
+      payee: false,
       note: row.note,
     }));
     const result = await prisma.income.createMany({ data });

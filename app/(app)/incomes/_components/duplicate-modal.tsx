@@ -57,12 +57,20 @@ export function DuplicateIncomeBanner({
     return out;
   }, [vy, vm]);
 
+  const oneOffIncomes = useMemo(
+    () =>
+      incomes.filter(
+        (r) => !r.id.startsWith("optimistic-") && !r.id.startsWith("recurring-") && !r.isRecurring,
+      ),
+    [incomes],
+  );
+
   function openDialog() {
     const defaultKey = targetOptions[0]?.key ?? null;
     setTargetKey(defaultKey);
     const init: Record<string, boolean> = {};
-    for (const row of incomes) {
-      init[row.id] = row.isRecurring;
+    for (const row of oneOffIncomes) {
+      init[row.id] = false;
     }
     setSelected(init);
     setOpen(true);
@@ -96,7 +104,7 @@ export function DuplicateIncomeBanner({
     });
   }
 
-  if (!incomes.length) {
+  if (!oneOffIncomes.length) {
     return null;
   }
 
@@ -104,7 +112,7 @@ export function DuplicateIncomeBanner({
     <>
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900/40">
         <p className="text-sm text-muted-foreground">
-          Copy this month&apos;s incomes into a future month for planning.
+          Copy this month&apos;s one-off incomes into a future month for planning.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Select
@@ -112,7 +120,7 @@ export function DuplicateIncomeBanner({
             value={targetKey ?? targetOptions[0]?.key ?? ""}
             onValueChange={setTargetKey}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-50">
               <SelectValue placeholder="Target month" />
             </SelectTrigger>
             <SelectContent>
@@ -135,7 +143,7 @@ export function DuplicateIncomeBanner({
             <DialogTitle>Select incomes to duplicate</DialogTitle>
           </DialogHeader>
           <ul className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
-            {incomes.map((row) => (
+            {oneOffIncomes.map((row) => (
               <li
                 key={row.id}
                 className="flex items-start gap-3 rounded-lg border border-border p-3 dark:border-zinc-800"
@@ -151,7 +159,6 @@ export function DuplicateIncomeBanner({
                   <p className="text-sm text-muted-foreground">
                     {formatMoney(row.amount, currency)} ·{" "}
                     {format(new Date(row.date), "MMM d")}
-                    {row.isRecurring ? " · recurring" : ""}
                   </p>
                 </label>
               </li>

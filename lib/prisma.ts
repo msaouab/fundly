@@ -13,7 +13,7 @@ const globalForPrisma = globalThis as unknown as {
  * `new PrismaClient({ ... })` option change (e.g. `log`) — otherwise dev HMR keeps
  * the old instance and old logging behavior forever.
  */
-const PRISMA_CLIENT_CACHE_REVISION = 5;
+const PRISMA_CLIENT_CACHE_REVISION = 7;
 
 function createClient() {
   const raw = process.env.DATABASE_URL;
@@ -40,12 +40,16 @@ function isStaleClient(client: PrismaClient): boolean {
     plannedEvent?: { findMany?: unknown };
     holiday?: { findMany?: unknown };
     yearlyEvent?: { findMany?: unknown };
+    recurringExpense?: { findMany?: unknown };
+    recurringIncome?: { findMany?: unknown };
   };
   if (typeof c.income?.findMany !== "function") return true;
   if (typeof c.expense?.findMany !== "function") return true;
   if (typeof c.plannedEvent?.findMany !== "function") return true;
   if (typeof c.holiday?.findMany !== "function") return true;
   if (typeof c.yearlyEvent?.findMany !== "function") return true;
+  if (typeof c.recurringExpense?.findMany !== "function") return true;
+  if (typeof c.recurringIncome?.findMany !== "function") return true;
   return false;
 }
 

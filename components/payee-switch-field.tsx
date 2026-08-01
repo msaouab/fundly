@@ -20,7 +20,7 @@ export function PayeeSwitchField({
   checked,
   onCheckedChange,
   disabled,
-  label = "Payee",
+  label = "Paid",
   className,
 }: PayeeSwitchFieldProps) {
   return (
@@ -28,13 +28,18 @@ export function PayeeSwitchField({
       <Label htmlFor={id} className="min-h-5 text-sm leading-none">
         {label}
       </Label>
-      <div className={cn(formControlShell, "justify-between")}>
-        <PayeeYesNo value={checked} className="text-sm" />
+      <div className={cn(formControlShell, "justify-between gap-3")}>
+        <PayeeYesNo
+          value={checked}
+          trueLabel="Paid"
+          falseLabel="Unpaid"
+        />
         <Switch
           id={id}
           checked={checked}
           onCheckedChange={onCheckedChange}
           disabled={disabled}
+          className="data-[state=checked]:bg-emerald-600 dark:data-[state=checked]:bg-emerald-500"
         />
       </div>
     </div>

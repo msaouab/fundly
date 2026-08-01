@@ -102,20 +102,22 @@ enum YearlyEventRelation {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String         @map("password_hash")
-  name          String?
-  countryCode   String         @default("MA") @map("country_code")
-  currency      String         @default("MAD")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  incomes       Income[]
-  expenses      Expense[]
-  goals         Goal[]
-  simulations   Simulation[]
-  plannedEvents PlannedEvent[]
-  yearlyEvents  YearlyEvent[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  passwordHash       String              @map("password_hash")
+  name               String?
+  countryCode        String              @default("MA") @map("country_code")
+  currency           String              @default("MAD")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  incomes            Income[]
+  expenses           Expense[]
+  goals              Goal[]
+  simulations        Simulation[]
+  plannedEvents      PlannedEvent[]
+  yearlyEvents       YearlyEvent[]
+  recurringIncomes   RecurringIncome[]
+  recurringExpenses  RecurringExpense[]
 
   @@map("users")
 }
@@ -268,4 +270,69 @@ model Expense {
   @@index([kind])
   @@index([category])
   @@map("expenses")
+}
+
+model RecurringIncome {
+  id                  String               @id @default(cuid())
+  userId              String               @map("user_id")
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source              String
+  type                IncomeType
+  amount              Decimal              @db.Decimal(12, 2)
+  currency            String               @default("MAD")
+  recurrenceFrequency RecurrenceFrequency  @default(MONTHLY) @map("recurrence_frequency")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  months              RecurringIncomeMonth[]
+
+  @@index([userId])
+  @@map("recurring_incomes")
+}
+
+model RecurringIncomeMonth {
+  id                String          @id @default(cuid())
+  recurringIncomeId String          @map("recurring_income_id")
+  recurringIncome   RecurringIncome @relation(fields: [recurringIncomeId], references: [id], onDelete: Cascade)
+  year              Int
+  month             Int
+  payee             Boolean         @default(false)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@unique([recurringIncomeId, year, month])
+  @@index([recurringIncomeId])
+  @@map("recurring_income_months")
+}
+
+model RecurringExpense {
+  id                  String                 @id @default(cuid())
+  userId              String                 @map("user_id")
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description         String                 @default("")
+  category            ExpenseCategory        @default(OTHER)
+  amount              Decimal                @db.Decimal(12, 2)
+  currency            String                 @default("MAD")
+  recurrenceFrequency RecurrenceFrequency    @default(MONTHLY) @map("recurrence_frequency")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  months              RecurringExpenseMonth[]
+
+  @@index([userId])
+  @@index([category])
+  @@map("recurring_expenses")
+}
+
+model RecurringExpenseMonth {
+  id                 String           @id @default(cuid())
+  recurringExpenseId String           @map("recurring_expense_id")
+  recurringExpense   RecurringExpense @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
+  year               Int
+  month              Int
+  payee              Boolean          @default(false)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@unique([recurringExpenseId, year, month])
+  @@index([recurringExpenseId])
+  @@map("recurring_expense_months")
 }

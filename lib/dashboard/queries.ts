@@ -17,21 +17,40 @@ async function fetchFlowSeriesForRange(
   end: Date,
 ): Promise<MonthlyFlowPoint[]> {
   const buckets = listMonthBucketsInRange(start, end, 24);
+  const [incomeTemplates, expenseTemplates] = await Promise.all([
+    prisma.recurringIncome.findMany({
+      where: { userId },
+      select: { amount: true },
+    }),
+    prisma.recurringExpense.findMany({
+      where: { userId },
+      select: { amount: true },
+    }),
+  ]);
+  const recurringIncomePerMonth = incomeTemplates.reduce(
+    (s, t) => s + Number(t.amount),
+    0,
+  );
+  const recurringExpensePerMonth = expenseTemplates.reduce(
+    (s, t) => s + Number(t.amount),
+    0,
+  );
+
   const series = await Promise.all(
     buckets.map(async (b) => {
       const { start: ms, end: me } = monthRangeLocal(b.year, b.month);
       const [incomeAgg, expenseAgg] = await Promise.all([
         prisma.income.aggregate({
-          where: { userId, date: { gte: ms, lte: me } },
+          where: { userId, isRecurring: false, date: { gte: ms, lte: me } },
           _sum: { amount: true },
         }),
         prisma.expense.aggregate({
-          where: { userId, date: { gte: ms, lte: me } },
+          where: { userId, kind: "VARIABLE", date: { gte: ms, lte: me } },
           _sum: { amount: true },
         }),
       ]);
-      const income = Number(incomeAgg._sum.amount ?? 0);
-      const expense = Number(expenseAgg._sum.amount ?? 0);
+      const income = Number(incomeAgg._sum.amount ?? 0) + recurringIncomePerMonth;
+      const expense = Number(expenseAgg._sum.amount ?? 0) + recurringExpensePerMonth;
       const { savings } = computeCashflow(income, expense);
       return {
         monthKey: b.monthKey,
@@ -51,18 +70,35 @@ async function fetchPeriodSavings(
   start: Date,
   end: Date,
 ): Promise<number> {
-  const [incomeAgg, expenseAgg] = await Promise.all([
+  const range = { start, end };
+  const buckets = listMonthBucketsInRange(start, end, 120);
+  const monthCount = buckets.length;
+
+  const [incomeAgg, expenseAgg, incomeTemplates, expenseTemplates] = await Promise.all([
     prisma.income.aggregate({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, isRecurring: false, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
     prisma.expense.aggregate({
-      where: { userId, date: { gte: start, lte: end } },
+      where: { userId, kind: "VARIABLE", date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
+    prisma.recurringIncome.findMany({
+      where: { userId },
+      select: { amount: true },
+    }),
+    prisma.recurringExpense.findMany({
+      where: { userId },
+      select: { amount: true },
+    }),
   ]);
-  const income = Number(incomeAgg._sum.amount ?? 0);
-  const expense = Number(expenseAgg._sum.amount ?? 0);
+  const income =
+    Number(incomeAgg._sum.amount ?? 0) +
+    incomeTemplates.reduce((s, t) => s + Number(t.amount), 0) * monthCount;
+  const expense =
+    Number(expenseAgg._sum.amount ?? 0) +
+    expenseTemplates.reduce((s, t) => s + Number(t.amount), 0) * monthCount;
+  void range;
   return computeCashflow(income, expense).savings;
 }
 

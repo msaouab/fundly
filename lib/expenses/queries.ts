@@ -1,7 +1,11 @@
 import type { CategoryBreakdown, ExpenseMonthSummary, ExpenseWithMeta } from "@/app/(app)/expenses/types";
 import { computeCashflow } from "@/lib/cashflow";
 import { prisma } from "@/lib/prisma";
-import type { PeriodRange } from "@/lib/period";
+import { listMonthBucketsInRange, type PeriodRange } from "@/lib/period";
+import {
+  projectRecurringExpenseRows,
+  recurringTemplatePeriodTotal,
+} from "@/lib/recurring/project";
 import type { ExpenseCategory, ExpenseKind } from "@/generated/prisma/enums";
 
 const expenseSelect = {
@@ -31,35 +35,65 @@ export async function fetchExpensesPageData(
   currency: string;
 }> {
   const dateFilter = { date: { gte: range.start, lte: range.end } };
+  const buckets = listMonthBucketsInRange(range.start, range.end, 120);
+  const years = [...new Set(buckets.map((b) => b.year))];
 
-  const [expenseRows, incomeAgg] = await Promise.all([
-    prisma.expense.findMany({
-      where: { userId, ...dateFilter },
-      select: expenseSelect,
-      orderBy: { date: "desc" },
-    }),
-    prisma.income.aggregate({
-      where: { userId, ...dateFilter },
-      _sum: { amount: true },
-    }),
-  ]);
+  const [expenseRows, incomeAgg, incomeTemplates, expenseTemplates, monthPaid] =
+    await Promise.all([
+      prisma.expense.findMany({
+        where: { userId, kind: "VARIABLE", ...dateFilter },
+        select: expenseSelect,
+        orderBy: { date: "desc" },
+      }),
+      prisma.income.aggregate({
+        where: { userId, ...dateFilter },
+        _sum: { amount: true },
+      }),
+      prisma.recurringIncome.findMany({
+        where: { userId },
+        select: { amount: true, currency: true },
+      }),
+      prisma.recurringExpense.findMany({
+        where: { userId },
+      }),
+      prisma.recurringExpenseMonth.findMany({
+        where: {
+          recurringExpense: { userId },
+          year: { in: years.length ? years : [new Date().getFullYear()] },
+        },
+        select: {
+          recurringExpenseId: true,
+          year: true,
+          month: true,
+          payee: true,
+        },
+      }),
+    ]);
 
-  const currency = expenseRows[0]?.currency ?? "MAD";
-  let total = 0;
-  let fixed = 0;
+  const variableIncome = Number(incomeAgg._sum.amount ?? 0);
+  const recurringIncomeTotal = recurringTemplatePeriodTotal(
+    incomeTemplates.map((t) => Number(t.amount)),
+    range,
+  );
+  const totalIncome = variableIncome + recurringIncomeTotal;
+
+  const projected = projectRecurringExpenseRows(
+    expenseTemplates,
+    monthPaid,
+    range,
+    totalIncome,
+  );
+
+  const currency =
+    expenseTemplates[0]?.currency ??
+    expenseRows[0]?.currency ??
+    incomeTemplates[0]?.currency ??
+    "MAD";
+
   let variable = 0;
-  for (const r of expenseRows) {
-    const n = Number(r.amount);
-    total += n;
-    if (r.kind === "FIXED") fixed += n;
-    else variable += n;
-  }
-  const totalIncome = Number(incomeAgg._sum.amount ?? 0);
-  const { savings, savingsRate } = computeCashflow(totalIncome, total);
-
-  const expenses: ExpenseWithMeta[] = expenseRows.map((r) => {
+  const variableExpenses: ExpenseWithMeta[] = expenseRows.map((r) => {
     const amount = Number(r.amount);
-    const sharePercent = totalIncome > 0 ? (amount / totalIncome) * 100 : 0;
+    variable += amount;
     return {
       id: r.id,
       userId: r.userId,
@@ -75,20 +109,26 @@ export async function fetchExpensesPageData(
       note: r.note,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
-      sharePercent,
+      sharePercent: totalIncome > 0 ? (amount / totalIncome) * 100 : 0,
     };
   });
 
+  const fixed = projected.reduce((s, r) => s + r.amount, 0);
+  const total = fixed + variable;
+  const { savings, savingsRate } = computeCashflow(totalIncome, total);
+
+  const expenses: ExpenseWithMeta[] = [...projected, ...variableExpenses].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+
   const catMap = new Map<ExpenseCategory, { total: number; count: number }>();
-  for (const r of expenseRows) {
-    const c = r.category as ExpenseCategory;
-    const prev = catMap.get(c);
-    const amt = Number(r.amount);
+  for (const r of expenses) {
+    const prev = catMap.get(r.category);
     if (prev) {
-      prev.total += amt;
+      prev.total += r.amount;
       prev.count += 1;
     } else {
-      catMap.set(c, { total: amt, count: 1 });
+      catMap.set(r.category, { total: r.amount, count: 1 });
     }
   }
   const breakdown: CategoryBreakdown[] = [...catMap.entries()].map(([category, v]) => ({
@@ -99,14 +139,17 @@ export async function fetchExpensesPageData(
   }));
   breakdown.sort((a, b) => b.total - a.total);
 
-  const summary: ExpenseMonthSummary = {
-    total,
-    fixed,
-    variable,
-    totalIncome,
-    savings,
-    savingsRate,
+  return {
+    expenses,
+    breakdown,
+    summary: {
+      total,
+      fixed,
+      variable,
+      totalIncome,
+      savings,
+      savingsRate,
+    },
+    currency,
   };
-
-  return { expenses, breakdown, summary, currency };
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getUserDisplayName, getUserInitials } from "@/lib/user-display";
@@ -35,11 +35,24 @@ function UserAvatar({
   );
 }
 
+function menuItemClass(active: boolean) {
+  return cn(
+    "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+    active
+      ? "bg-teal-50 text-teal-900 dark:bg-teal-950/60 dark:text-teal-100"
+      : "text-foreground",
+  );
+}
+
 export function UserProfileMenu({ name, email, className }: UserProfileMenuProps) {
   const pathname = usePathname();
   const initials = getUserInitials(name, email);
   const displayName = getUserDisplayName(name, email);
   const emailLine = email?.trim() ?? "";
+  const fixedActive = pathname === "/settings/fixed" || pathname.startsWith("/settings/fixed/");
+  const settingsActive =
+    pathname === "/settings" ||
+    (pathname.startsWith("/settings/") && !pathname.startsWith("/settings/fixed"));
 
   return (
     <Popover>
@@ -65,15 +78,11 @@ export function UserProfileMenu({ name, email, className }: UserProfileMenuProps
           ) : null}
         </div>
         <div className="p-1">
-          <Link
-            href="/settings"
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
-              pathname === "/settings" || pathname.startsWith("/settings/")
-                ? "bg-teal-50 text-teal-900 dark:bg-teal-950/60 dark:text-teal-100"
-                : "text-foreground",
-            )}
-          >
+          <Link href="/settings/fixed" className={menuItemClass(fixedActive)}>
+            <Wallet className="size-4 shrink-0 opacity-80" aria-hidden />
+            Recurring
+          </Link>
+          <Link href="/settings" className={menuItemClass(settingsActive)}>
             <Settings className="size-4 shrink-0 opacity-80" aria-hidden />
             Settings
           </Link>

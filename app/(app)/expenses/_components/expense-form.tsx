@@ -4,12 +4,11 @@ import { useEffect, useRef, useTransition, type ReactNode, type RefObject } from
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
-import { useForm, useWatch, Controller, type Resolver } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addExpense } from "../actions";
 import { expenseAddFormSchema, type ExpenseAddFormValues } from "../schema";
-import type { ExpenseKind } from "@/generated/prisma/enums";
 import type { ExpenseWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -34,10 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { cn } from "@/lib/utils";
-import { ExpenseTypeToggle } from "./expense-type-toggle";
 import { PayeeSwitchField } from "@/components/payee-switch-field";
 import { normalizeDateToLocalNoon } from "@/lib/date";
 import {
@@ -50,8 +47,8 @@ const defaultValues: ExpenseAddFormValues = {
   amount: 0,
   date: normalizeDateToLocalNoon(new Date()),
   description: "",
-  kind: "FIXED",
-  category: "HOUSING",
+  kind: "VARIABLE",
+  category: "FOOD_GROCERIES",
   currency: "MAD",
   isRecurring: false,
   recurrenceFrequency: null,
@@ -71,16 +68,13 @@ function buildOptimisticExpense(
     id,
     userId,
     description: values.description || "",
-    kind: values.kind,
+    kind: "VARIABLE",
     category: values.category,
     amount,
     date: normalizeDateToLocalNoon(values.date).toISOString(),
     currency: values.currency || codeCurrency,
-    isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
-    recurrenceFrequency:
-      values.kind === "FIXED" && values.isRecurring
-        ? values.recurrenceFrequency ?? null
-        : null,
+    isRecurring: false,
+    recurrenceFrequency: null,
     payee: values.payee,
     note: null,
     createdAt: now,
@@ -89,9 +83,6 @@ function buildOptimisticExpense(
       monthTotalIncome > 0 ? (amount / monthTotalIncome) * 100 : 0,
   };
 }
-
-const formControlShell =
-  "flex h-10 w-full items-center rounded-md border border-border bg-background px-3 dark:border-zinc-700 dark:bg-zinc-950";
 
 type FormFieldProps = {
   label: ReactNode;
@@ -150,23 +141,10 @@ export function ExpenseForm({
     defaultValues: { ...defaultValues, currency },
   });
 
-  const kind = useWatch({ control: form.control, name: "kind" });
-  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
-
   const {
     ref: amountFieldRef,
     ...amountFieldRest
   } = form.register("amount", { valueAsNumber: true });
-
-  useEffect(() => {
-    if (kind === "FIXED") {
-      form.setValue("category", "HOUSING", { shouldValidate: true });
-    } else {
-      form.setValue("category", "FOOD_GROCERIES", { shouldValidate: true });
-      form.setValue("isRecurring", false);
-      form.setValue("recurrenceFrequency", null);
-    }
-  }, [kind, form]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -187,23 +165,24 @@ export function ExpenseForm({
 
   function onSubmit(values: ExpenseAddFormValues) {
     startTransition(async () => {
+      const payload: ExpenseAddFormValues = {
+        ...values,
+        kind: "VARIABLE",
+        isRecurring: false,
+        recurrenceFrequency: null,
+      };
       const canOptimistic =
         typeof userId === "string" && onOptimisticAdd && onOptimisticEnd;
       const optimisticRow = canOptimistic
-        ? buildOptimisticExpense(userId, values, currency, monthTotalIncome)
+        ? buildOptimisticExpense(userId, payload, currency, monthTotalIncome)
         : null;
       if (optimisticRow && onOptimisticAdd) {
         onOptimisticAdd(optimisticRow);
       }
       const res = await addExpense({
-        ...values,
+        ...payload,
         currency,
-        payee: values.payee,
-        isRecurring: values.kind === "FIXED" ? values.isRecurring : false,
-        recurrenceFrequency:
-          values.kind === "FIXED" && values.isRecurring
-            ? values.recurrenceFrequency ?? null
-            : null,
+        payee: payload.payee,
       });
       if (optimisticRow && onOptimisticEnd) {
         onOptimisticEnd(optimisticRow.id);
@@ -214,8 +193,6 @@ export function ExpenseForm({
           ...defaultValues,
           currency,
           date: normalizeDateToLocalNoon(new Date()),
-          kind: values.kind,
-          category: values.kind === "FIXED" ? "HOUSING" : "FOOD_GROCERIES",
         });
         router.refresh();
       } else {
@@ -229,16 +206,10 @@ export function ExpenseForm({
     });
   }
 
-  const accent =
-    kind === "FIXED"
-      ? "border-primary/35 ring-primary/20 dark:border-primary/40 dark:ring-primary/25"
-      : "border-border ring-ring/15 dark:border-zinc-700 dark:ring-ring/20";
-
   return (
     <Card
       className={cn(
-        "border-border bg-background ring-1 ring-transparent transition-colors dark:border-zinc-800 dark:bg-zinc-900",
-        accent,
+        "border-border bg-background ring-1 ring-ring/15 transition-colors dark:border-zinc-700 dark:bg-zinc-900 dark:ring-ring/20",
         className,
       )}
     >
@@ -257,21 +228,6 @@ export function ExpenseForm({
           onSubmit={form.handleSubmit(onSubmit)}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <div className="col-span-full space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Kind</p>
-            <Controller
-              control={form.control}
-              name="kind"
-              render={({ field }) => (
-                <ExpenseTypeToggle
-                  value={field.value as ExpenseKind}
-                  onChange={field.onChange}
-                  disabled={pending}
-                />
-              )}
-            />
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="exp-amount">Amount ({currency})</Label>
             <div className="relative">
@@ -376,55 +332,6 @@ export function ExpenseForm({
             />
             </FormField>
 
-            {kind === "FIXED" ? (
-              <FormField label="Recurring" htmlFor="exp-recurring">
-                <div className={cn(formControlShell, "justify-between")}>
-                  <span className="truncate text-sm text-muted-foreground">Repeats on schedule</span>
-                  <Controller
-                    control={form.control}
-                    name="isRecurring"
-                    render={({ field }) => (
-                      <Switch
-                        id="exp-recurring"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-              </FormField>
-            ) : null}
-
-            {kind === "FIXED" && isRecurring ? (
-              <FormField
-                label="Recurrence"
-                htmlFor="expense-recurrence-trigger"
-                error={form.formState.errors.recurrenceFrequency?.message}
-              >
-                <Controller
-                  control={form.control}
-                  name="recurrenceFrequency"
-                  render={({ field }) => (
-                    <Select
-                      name="expenseRecurrence"
-                      value={field.value ?? ""}
-                      onValueChange={(v) => field.onChange(v || null)}
-                    >
-                      <SelectTrigger id="expense-recurrence-trigger" className="h-10 dark:border-zinc-700">
-                        <SelectValue placeholder="Frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="WEEKLY">Weekly</SelectItem>
-                        <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
-                        <SelectItem value="MONTHLY">Monthly</SelectItem>
-                        <SelectItem value="YEARLY">Yearly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </FormField>
-            ) : null}
-
             <Controller
               control={form.control}
               name="payee"
@@ -440,7 +347,7 @@ export function ExpenseForm({
           </div>
 
           <div className="col-span-full flex justify-end pt-1 sm:col-span-2">
-            <Button type="submit" disabled={pending} className="min-w-[140px]">
+            <Button type="submit" disabled={pending} className="min-w-36">
               {pending ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

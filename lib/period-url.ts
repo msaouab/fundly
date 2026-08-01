@@ -37,6 +37,7 @@ export function calendarMonthFromPeriodQuery(periodQuery: string | null): string
   }
   const period = parsePeriodFromSearchParams(sp);
   if (
+    period.preset === "next_month" ||
     period.preset === "this_month" ||
     period.preset === "last_month" ||
     (period.start.getFullYear() === period.end.getFullYear() &&

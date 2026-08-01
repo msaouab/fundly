@@ -59,13 +59,23 @@ export function DuplicateExpenseBanner({
     return out;
   }, [vy, vm]);
 
+  const variableExpenses = useMemo(
+    () =>
+      expenses.filter(
+        (r) =>
+          !r.id.startsWith("optimistic-") &&
+          !r.id.startsWith("recurring-") &&
+          r.kind === "VARIABLE",
+      ),
+    [expenses],
+  );
+
   function openDialog() {
     const defaultKey = targetOptions[0]?.key ?? null;
     setTargetKey(defaultKey);
     const init: Record<string, boolean> = {};
-    for (const row of expenses) {
-      if (row.id.startsWith("optimistic-")) continue;
-      init[row.id] = row.kind === "FIXED";
+    for (const row of variableExpenses) {
+      init[row.id] = false;
     }
     setSelected(init);
     setOpen(true);
@@ -92,19 +102,9 @@ export function DuplicateExpenseBanner({
     setSelected((s) => ({ ...s, [id]: checked }));
   }
 
-  function selectAllFixed() {
-    const next: Record<string, boolean> = { ...selected };
-    for (const row of expenses) {
-      if (row.id.startsWith("optimistic-")) continue;
-      next[row.id] = row.kind === "FIXED";
-    }
-    setSelected(next);
-  }
-
   function selectAll() {
     const next: Record<string, boolean> = { ...selected };
-    for (const row of expenses) {
-      if (row.id.startsWith("optimistic-")) continue;
+    for (const row of variableExpenses) {
       next[row.id] = true;
     }
     setSelected(next);
@@ -113,7 +113,7 @@ export function DuplicateExpenseBanner({
   function confirm() {
     const key = targetKey ?? targetOptions[0]?.key;
     if (!key || !selectedIds.length) return;
-    const realIds = selectedIds.filter((id) => !id.startsWith("optimistic-"));
+    const realIds = selectedIds.filter((id) => !id.startsWith("optimistic-") && !id.startsWith("recurring-"));
     if (!realIds.length) {
       toast.error("Nothing to duplicate yet.");
       return;
@@ -132,7 +132,7 @@ export function DuplicateExpenseBanner({
     });
   }
 
-  const listRows = expenses.filter((r) => !r.id.startsWith("optimistic-"));
+  const listRows = variableExpenses;
 
   if (!listRows.length) {
     return null;
@@ -148,7 +148,7 @@ export function DuplicateExpenseBanner({
             value={targetKey ?? targetOptions[0]?.key ?? ""}
             onValueChange={setTargetKey}
           >
-            <SelectTrigger className="w-[200px] dark:border-zinc-700">
+            <SelectTrigger className="w-50 dark:border-zinc-700">
               <SelectValue placeholder="Target month" />
             </SelectTrigger>
             <SelectContent>
@@ -171,9 +171,6 @@ export function DuplicateExpenseBanner({
             <DialogTitle>Select expenses to duplicate</DialogTitle>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={selectAllFixed}>
-              Select all fixed
-            </Button>
             <Button type="button" size="sm" variant="outline" onClick={selectAll}>
               Select all
             </Button>

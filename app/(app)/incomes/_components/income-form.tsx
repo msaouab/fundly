@@ -34,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { PayeeSwitchField } from "@/components/payee-switch-field";
 import { cn } from "@/lib/utils";
 import { normalizeDateToLocalNoon } from "@/lib/date";
@@ -48,7 +47,7 @@ const defaultValues: IncomeAddFormValues = {
   amount: 0,
   date: normalizeDateToLocalNoon(new Date()),
   source: "",
-  type: "SALARY",
+  type: "FREELANCE",
   currency: "MAD",
   isRecurring: false,
   recurrenceFrequency: null,
@@ -81,8 +80,8 @@ function buildOptimisticIncome(
     amount,
     date: normalizeDateToLocalNoon(values.date).toISOString(),
     currency: values.currency || codeCurrency,
-    isRecurring: values.isRecurring,
-    recurrenceFrequency: values.recurrenceFrequency ?? null,
+    isRecurring: false,
+    recurrenceFrequency: null,
     payee: values.payee,
     note: null,
     createdAt: now,
@@ -90,9 +89,6 @@ function buildOptimisticIncome(
     sharePercent: newTotal > 0 ? (amount / newTotal) * 100 : 0,
   };
 }
-
-const formControlShell =
-  "flex h-10 w-full items-center rounded-md border border-border bg-background px-3 dark:border-zinc-700 dark:bg-zinc-950";
 
 type FormFieldProps = {
   label: ReactNode;
@@ -150,20 +146,11 @@ export function IncomeForm({
   });
 
   const type = useWatch({ control: form.control, name: "type" });
-  const isRecurring = useWatch({ control: form.control, name: "isRecurring" });
-  const showRecurring = type === "SALARY" || type === "PASSIVE";
 
   const {
     ref: amountFieldRef,
     ...amountFieldRest
   } = form.register("amount", { valueAsNumber: true });
-
-  useEffect(() => {
-    if (!showRecurring) {
-      form.setValue("isRecurring", false);
-      form.setValue("recurrenceFrequency", null);
-    }
-  }, [showRecurring, form]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -184,22 +171,23 @@ export function IncomeForm({
 
   function onSubmit(values: IncomeAddFormValues) {
     startTransition(async () => {
+      const payload: IncomeAddFormValues = {
+        ...values,
+        isRecurring: false,
+        recurrenceFrequency: null,
+      };
       const canOptimistic =
         typeof userId === "string" && onOptimisticAdd && onOptimisticEnd;
       const optimisticRow = canOptimistic
-        ? buildOptimisticIncome(userId, values, currency, monthTotal)
+        ? buildOptimisticIncome(userId, payload, currency, monthTotal)
         : null;
       if (optimisticRow && onOptimisticAdd) {
         onOptimisticAdd(optimisticRow);
       }
       const res = await addIncome({
-        ...values,
+        ...payload,
         currency,
-        payee: values.payee,
-        recurrenceFrequency: values.isRecurring
-          ? values.recurrenceFrequency ?? null
-          : null,
-        isRecurring: values.isRecurring,
+        payee: payload.payee,
       });
       if (optimisticRow && onOptimisticEnd) {
         onOptimisticEnd(optimisticRow.id);
@@ -333,65 +321,16 @@ export function IncomeForm({
                       <SelectValue placeholder="Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SALARY">Salary</SelectItem>
                       <SelectItem value="FREELANCE">Freelance</SelectItem>
-                      <SelectItem value="PASSIVE">Passive</SelectItem>
                       <SelectItem value="BONUS">Bonus</SelectItem>
                       <SelectItem value="OTHER">Other</SelectItem>
+                      <SelectItem value="SALARY">Salary</SelectItem>
+                      <SelectItem value="PASSIVE">Passive</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               />
             </FormField>
-
-            {showRecurring ? (
-              <FormField label="Recurring" htmlFor="income-add-recurring">
-                <div className={cn(formControlShell, "justify-between")}>
-                  <span className="truncate text-sm text-muted-foreground">Repeats on schedule</span>
-                  <Controller
-                    control={form.control}
-                    name="isRecurring"
-                    render={({ field }) => (
-                      <Switch
-                        id="income-add-recurring"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-              </FormField>
-            ) : null}
-
-            {showRecurring && isRecurring ? (
-              <FormField
-                label="Recurrence"
-                htmlFor="income-recurrence-trigger"
-                error={form.formState.errors.recurrenceFrequency?.message}
-              >
-                <Controller
-                  control={form.control}
-                  name="recurrenceFrequency"
-                  render={({ field }) => (
-                    <Select
-                      name="incomeRecurrence"
-                      value={field.value ?? ""}
-                      onValueChange={(v) => field.onChange(v || null)}
-                    >
-                      <SelectTrigger id="income-recurrence-trigger" className="h-10 dark:border-zinc-700">
-                        <SelectValue placeholder="Frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="WEEKLY">Weekly</SelectItem>
-                        <SelectItem value="BIWEEKLY">Biweekly</SelectItem>
-                        <SelectItem value="MONTHLY">Monthly</SelectItem>
-                        <SelectItem value="YEARLY">Yearly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </FormField>
-            ) : null}
 
             <Controller
               control={form.control}
