@@ -160,7 +160,7 @@ export default async function FixedSettingsPage() {
   );
 
   return (
-    <AppPage size="3xl">
+    <AppPage size="6xl">
       <AppPageHeader
         title="Recurring"
         description="Define fixed incomes and expenses once. They always appear in your monthly tables; mark Paid separately each month."

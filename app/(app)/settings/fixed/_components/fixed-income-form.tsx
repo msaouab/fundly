@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { useForm, Controller, useWatch, type Resolver } from "react-hook-form";
@@ -47,9 +47,11 @@ import {
 } from "@/components/ui/dialog";
 import { formatMoney } from "@/lib/money";
 import { normalizeDateToLocalNoon } from "@/lib/date";
+import { ledgerRowHover } from "@/lib/ledger-table-columns";
 import { formatOccurrenceEnds } from "@/lib/recurring/occurrence";
 import type { IncomeType, RecurrenceFrequency } from "@/generated/prisma/enums";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export type RecurringIncomeRow = {
   id: string;
@@ -66,34 +68,44 @@ type FixedIncomeFormProps = {
   currency?: string;
 };
 
-const defaultValues: RecurringIncomeFormValues = {
-  amount: 0,
-  source: "",
-  type: "SALARY",
-  currency: "MAD",
-  recurrenceFrequency: "MONTHLY",
-  endsMode: "indefinite",
-  occurrenceCount: null,
-  startsAt: normalizeDateToLocalNoon(new Date()),
-};
+function createIncomeDefaults(currency: string): RecurringIncomeFormValues {
+  return {
+    amount: 0,
+    source: "",
+    type: "SALARY",
+    currency,
+    recurrenceFrequency: "MONTHLY",
+    endsMode: "indefinite",
+    occurrenceCount: null,
+    startsAt: normalizeDateToLocalNoon(new Date()),
+  };
+}
 
 export function FixedIncomeForm({ currency = "MAD" }: FixedIncomeFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const form = useForm<RecurringIncomeFormValues>({
     resolver: zodResolver(recurringIncomeFormSchema) as Resolver<RecurringIncomeFormValues>,
-    defaultValues: { ...defaultValues, currency },
+    defaultValues: createIncomeDefaults(currency),
   });
   const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
   const recurrenceFrequency =
     useWatch({ control: form.control, name: "recurrenceFrequency" }) ?? "MONTHLY";
+
+  // Align "today" with the client clock after SSR (timezone / stale module Date).
+  useEffect(() => {
+    form.setValue("startsAt", normalizeDateToLocalNoon(new Date()), {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [form]);
 
   function onSubmit(values: RecurringIncomeFormValues) {
     startTransition(async () => {
       const res = await createRecurringIncome({ ...values, currency });
       if (res.ok) {
         toast.success("Recurring income added");
-        form.reset({ ...defaultValues, currency, startsAt: normalizeDateToLocalNoon(new Date()) });
+        form.reset(createIncomeDefaults(currency));
         router.refresh();
       } else {
         toast.error(res.error);
@@ -231,7 +243,7 @@ export function FixedIncomeTable({ rows, currency }: FixedIncomeTableProps) {
           occurrenceCount: ends.occurrenceCount,
           startsAt: normalizeDateToLocalNoon(new Date(editRow.startsAt)),
         }
-      : defaultValues,
+      : createIncomeDefaults(currency),
   });
   const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
   const editFrequency =
@@ -285,7 +297,10 @@ export function FixedIncomeTable({ rows, currency }: FixedIncomeTableProps) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-b border-border/60 last:border-0">
+            <tr
+              key={row.id}
+              className={cn("border-b border-border/60 last:border-0", ledgerRowHover)}
+            >
               <td className="max-w-48 truncate py-2.5 pr-3 font-medium">{row.source}</td>
               <td className="py-2.5 pr-3 capitalize text-muted-foreground whitespace-nowrap">
                 {row.type.toLowerCase()}

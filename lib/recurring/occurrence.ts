@@ -1,4 +1,5 @@
 import type { RecurrenceFrequency } from "@/generated/prisma/enums";
+import { shiftDateToLocalMonth } from "@/lib/date";
 import { monthRangeLocal } from "@/lib/month";
 
 const PERIOD_UNIT: Record<
@@ -65,9 +66,90 @@ function windowStart(
   return new Date(startsAt.getFullYear(), startsAt.getMonth(), 1);
 }
 
+function isWithinOccurrenceWindow(
+  startsAt: Date,
+  occurrenceCount: number | null | undefined,
+  year: number,
+  month: number,
+  frequency?: RecurrenceFrequency | string | null,
+): boolean {
+  const end = occurrenceWindowEnd(startsAt, occurrenceCount, frequency);
+  const start = windowStart(startsAt, frequency);
+  const { start: monthStart } = monthRangeLocal(year, month);
+  const monthEndExclusive = new Date(year, month, 1);
+
+  if (!end) {
+    return monthEndExclusive > start;
+  }
+  return monthStart < end && monthEndExclusive > start;
+}
+
+/**
+ * Whether this calendar month is a scheduled occurrence month for the frequency
+ * (ignores occurrence-count window — check that separately).
+ */
+export function isRecurrenceScheduledInMonth(
+  startsAt: Date,
+  year: number,
+  month: number,
+  frequency?: RecurrenceFrequency | string | null,
+): boolean {
+  const freq = (frequency as RecurrenceFrequency) || "MONTHLY";
+  const startMonth = startsAt.getMonth() + 1;
+
+  switch (freq) {
+    case "YEARLY":
+      // e.g. insurance due every August → only August
+      return month === startMonth;
+    case "WEEKLY":
+    case "BIWEEKLY": {
+      const stepDays = freq === "WEEKLY" ? 7 : 14;
+      const { start: monthStart, end: monthEnd } = monthRangeLocal(year, month);
+      const cursor = new Date(startsAt);
+      cursor.setHours(12, 0, 0, 0);
+      if (cursor > monthEnd) return false;
+      while (cursor < monthStart) {
+        cursor.setDate(cursor.getDate() + stepDays);
+      }
+      return cursor <= monthEnd;
+    }
+    case "MONTHLY":
+    default:
+      return true;
+  }
+}
+
+/**
+ * Calendar date to show for a projected row in this month (local noon), or null
+ * if the template does not occur in the month.
+ */
+export function occurrenceDateInMonth(
+  startsAt: Date,
+  year: number,
+  month: number,
+  frequency?: RecurrenceFrequency | string | null,
+): Date | null {
+  if (!isRecurrenceScheduledInMonth(startsAt, year, month, frequency)) {
+    return null;
+  }
+  const freq = (frequency as RecurrenceFrequency) || "MONTHLY";
+  if (freq === "WEEKLY" || freq === "BIWEEKLY") {
+    const stepDays = freq === "WEEKLY" ? 7 : 14;
+    const { start: monthStart, end: monthEnd } = monthRangeLocal(year, month);
+    const cursor = new Date(startsAt);
+    cursor.setHours(12, 0, 0, 0);
+    while (cursor < monthStart) {
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+    if (cursor > monthEnd) return null;
+    return cursor;
+  }
+  return shiftDateToLocalMonth(startsAt, year, month);
+}
+
 /**
  * Whether a template appears in a given calendar month.
- * Window starts at `startsAt`; null occurrenceCount = indefinite.
+ * Respects the occurrence window and recurrence schedule (e.g. yearly → anniversary month only).
  */
 export function isRecurringActiveInMonth(
   startsAt: Date,
@@ -76,19 +158,10 @@ export function isRecurringActiveInMonth(
   month: number,
   frequency?: RecurrenceFrequency | string | null,
 ): boolean {
-  const end = occurrenceWindowEnd(startsAt, occurrenceCount, frequency);
-  if (!end) {
-    // Indefinite: still hide months before the start
-    const start = windowStart(startsAt, frequency);
-    const { start: monthStart } = monthRangeLocal(year, month);
-    const monthEndExclusive = new Date(year, month, 1);
-    return monthEndExclusive > start;
+  if (!isWithinOccurrenceWindow(startsAt, occurrenceCount, year, month, frequency)) {
+    return false;
   }
-
-  const start = windowStart(startsAt, frequency);
-  const { start: monthStart } = monthRangeLocal(year, month);
-  const monthEndExclusive = new Date(year, month, 1);
-  return monthStart < end && monthEndExclusive > start;
+  return isRecurrenceScheduledInMonth(startsAt, year, month, frequency);
 }
 
 /**

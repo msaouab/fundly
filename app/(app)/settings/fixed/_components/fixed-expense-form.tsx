@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { useForm, Controller, useWatch, type Resolver } from "react-hook-form";
@@ -48,9 +48,11 @@ import {
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { formatMoney } from "@/lib/money";
 import { normalizeDateToLocalNoon } from "@/lib/date";
+import { ledgerRowHover } from "@/lib/ledger-table-columns";
 import { formatOccurrenceEnds } from "@/lib/recurring/occurrence";
 import type { ExpenseCategory, RecurrenceFrequency } from "@/generated/prisma/enums";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export type RecurringExpenseRow = {
   id: string;
@@ -67,34 +69,43 @@ type FixedExpenseFormProps = {
   currency?: string;
 };
 
-const defaultValues: RecurringExpenseFormValues = {
-  amount: 0,
-  description: "",
-  category: "HOUSING",
-  currency: "MAD",
-  recurrenceFrequency: "MONTHLY",
-  endsMode: "indefinite",
-  occurrenceCount: null,
-  startsAt: normalizeDateToLocalNoon(new Date()),
-};
+function createExpenseDefaults(currency: string): RecurringExpenseFormValues {
+  return {
+    amount: 0,
+    description: "",
+    category: "HOUSING",
+    currency,
+    recurrenceFrequency: "MONTHLY",
+    endsMode: "indefinite",
+    occurrenceCount: null,
+    startsAt: normalizeDateToLocalNoon(new Date()),
+  };
+}
 
 export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const form = useForm<RecurringExpenseFormValues>({
     resolver: zodResolver(recurringExpenseFormSchema) as Resolver<RecurringExpenseFormValues>,
-    defaultValues: { ...defaultValues, currency },
+    defaultValues: createExpenseDefaults(currency),
   });
   const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
   const recurrenceFrequency =
     useWatch({ control: form.control, name: "recurrenceFrequency" }) ?? "MONTHLY";
+
+  useEffect(() => {
+    form.setValue("startsAt", normalizeDateToLocalNoon(new Date()), {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [form]);
 
   function onSubmit(values: RecurringExpenseFormValues) {
     startTransition(async () => {
       const res = await createRecurringExpense({ ...values, currency });
       if (res.ok) {
         toast.success("Recurring expense added");
-        form.reset({ ...defaultValues, currency, startsAt: normalizeDateToLocalNoon(new Date()) });
+        form.reset(createExpenseDefaults(currency));
         router.refresh();
       } else {
         toast.error(res.error);
@@ -238,7 +249,7 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
           occurrenceCount: ends.occurrenceCount,
           startsAt: normalizeDateToLocalNoon(new Date(editRow.startsAt)),
         }
-      : { ...defaultValues, currency },
+      : createExpenseDefaults(currency),
   });
   const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
   const editFrequency =
@@ -294,7 +305,10 @@ export function FixedExpenseTable({ rows, currency }: FixedExpenseTableProps) {
           {rows.map((row) => {
             const cfg = CATEGORY_CONFIG[row.category];
             return (
-              <tr key={row.id} className="border-b border-border/60 last:border-0">
+              <tr
+                key={row.id}
+                className={cn("border-b border-border/60 last:border-0", ledgerRowHover)}
+              >
                 <td className="max-w-48 truncate py-2.5 pr-3 font-medium">
                   {row.description?.trim() || cfg.label}
                 </td>

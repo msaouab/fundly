@@ -84,7 +84,7 @@ export async function fetchForecastBaseline(
     type: r.type as IncomeType,
     amount: Number(r.amount),
     recurrenceFrequency: r.recurrenceFrequency as RecurrenceFrequency,
-    anchorMonth: thisMonth,
+    anchorMonth: r.startsAt.getMonth() + 1,
     occurrenceCount: r.occurrenceCount,
     startsAt: r.startsAt,
   }));
@@ -100,7 +100,7 @@ export async function fetchForecastBaseline(
       category: r.category as ExpenseCategory,
       amount: Number(r.amount),
       recurrenceFrequency: r.recurrenceFrequency as RecurrenceFrequency,
-      anchorMonth: thisMonth,
+      anchorMonth: r.startsAt.getMonth() + 1,
       occurrenceCount: r.occurrenceCount,
       startsAt: r.startsAt,
     };

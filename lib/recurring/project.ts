@@ -1,12 +1,14 @@
 import type { ExpenseWithMeta } from "@/app/(app)/expenses/types";
 import type { IncomeWithMeta } from "@/app/(app)/incomes/types";
-import { monthRangeLocal } from "@/lib/month";
 import { listMonthBucketsInRange, type PeriodRange } from "@/lib/period";
 import {
   recurringExpenseRowId,
   recurringIncomeRowId,
 } from "@/lib/recurring/ids";
-import { isRecurringActiveInMonth } from "@/lib/recurring/occurrence";
+import {
+  isRecurringActiveInMonth,
+  occurrenceDateInMonth,
+} from "@/lib/recurring/occurrence";
 import type {
   ExpenseCategory,
   IncomeType,
@@ -70,7 +72,6 @@ export function projectRecurringExpenseRows(
   const rows: ExpenseWithMeta[] = [];
 
   for (const bucket of buckets) {
-    const { start } = monthRangeLocal(bucket.year, bucket.month);
     for (const t of templates) {
       if (
         !isRecurringActiveInMonth(
@@ -83,6 +84,13 @@ export function projectRecurringExpenseRows(
       ) {
         continue;
       }
+      const occurDate = occurrenceDateInMonth(
+        t.startsAt,
+        bucket.year,
+        bucket.month,
+        t.recurrenceFrequency,
+      );
+      if (!occurDate) continue;
       const amount = Number(t.amount);
       const payee =
         paidMap.get(`${t.id}:${bucket.year}-${bucket.month}`) ?? false;
@@ -93,7 +101,7 @@ export function projectRecurringExpenseRows(
         kind: "FIXED",
         category: t.category,
         amount,
-        date: start.toISOString(),
+        date: occurDate.toISOString(),
         currency: t.currency,
         isRecurring: true,
         recurrenceFrequency: t.recurrenceFrequency,
@@ -124,7 +132,6 @@ export function projectRecurringIncomeRows(
   const rows: IncomeWithMeta[] = [];
 
   for (const bucket of buckets) {
-    const { start } = monthRangeLocal(bucket.year, bucket.month);
     for (const t of templates) {
       if (
         !isRecurringActiveInMonth(
@@ -137,6 +144,13 @@ export function projectRecurringIncomeRows(
       ) {
         continue;
       }
+      const occurDate = occurrenceDateInMonth(
+        t.startsAt,
+        bucket.year,
+        bucket.month,
+        t.recurrenceFrequency,
+      );
+      if (!occurDate) continue;
       const amount = Number(t.amount);
       const payee =
         paidMap.get(`${t.id}:${bucket.year}-${bucket.month}`) ?? false;
@@ -146,7 +160,7 @@ export function projectRecurringIncomeRows(
         source: t.source,
         type: t.type,
         amount,
-        date: start.toISOString(),
+        date: occurDate.toISOString(),
         currency: t.currency,
         isRecurring: true,
         recurrenceFrequency: t.recurrenceFrequency,

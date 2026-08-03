@@ -29,6 +29,7 @@ import { setRecurringIncomePaid } from "@/app/(app)/settings/fixed/actions";
 import { isRecurringRowId, parseRecurringIncomeRowId } from "@/lib/recurring/ids";
 import { formatRecurrenceFrequency } from "@/lib/recurring/labels";
 import { RecurringPaidToggle } from "@/components/recurring-paid-toggle";
+import { PayeeYesNo } from "@/components/payee-yes-no";
 import {
   incomeEditFormSchema,
   type IncomeEditFormValues,
@@ -76,27 +77,44 @@ import { TablePagination } from "@/components/table-pagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { EmptyState } from "@/components/empty-state";
 import { LedgerTableScroll } from "@/components/ledger-table-scroll";
-import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
+import { ledgerColNowrap, ledgerColPrimaryText, ledgerRowHover } from "@/lib/ledger-table-columns";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 function IncomePaidCell({ row }: { row: IncomeWithMeta }) {
   const parsed = parseRecurringIncomeRowId(row.id);
-  if (!parsed) return <span className="text-muted-foreground">—</span>;
-  return (
-    <RecurringPaidToggle
-      checked={row.payee}
-      onToggle={async (next) => {
-        const res = await setRecurringIncomePaid({
-          templateId: parsed.templateId,
-          year: parsed.year,
-          month: parsed.month,
-          payee: next,
-        });
-        return res.ok ? { ok: true } : { ok: false, error: res.error };
-      }}
-    />
-  );
+  if (parsed) {
+    return (
+      <RecurringPaidToggle
+        checked={row.payee}
+        onToggle={async (next) => {
+          const res = await setRecurringIncomePaid({
+            templateId: parsed.templateId,
+            year: parsed.year,
+            month: parsed.month,
+            payee: next,
+          });
+          return res.ok ? { ok: true } : { ok: false, error: res.error };
+        }}
+      />
+    );
+  }
+  return <PayeeYesNo value={row.payee} trueLabel="Paid" falseLabel="Unpaid" />;
+}
+
+function IncomeRecurrenceCell({ row }: { row: IncomeWithMeta }) {
+  if (row.isRecurring || row.recurrenceFrequency || isRecurringRowId(row.id)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Repeat
+          className="size-3.5 shrink-0 text-teal-600 dark:text-teal-400"
+          aria-hidden
+        />
+        {formatRecurrenceFrequency(row.recurrenceFrequency)}
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">—</span>;
 }
 
 const ALL_INCOME_TYPES: IncomeType[] = [
@@ -158,7 +176,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
   });
   const [editRow, setEditRow] = useState<IncomeWithMeta | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [recurringExpanded, setRecurringExpanded] = useState(false);
+  const [recurringExpanded, setRecurringExpanded] = useState(true);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -208,7 +226,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
     const recurring: IncomeWithMeta[] = [];
     const oneOff: IncomeWithMeta[] = [];
     for (const row of filtered) {
-      if (row.isRecurring) recurring.push(row);
+      if (row.isRecurring || isRecurringRowId(row.id)) recurring.push(row);
       else oneOff.push(row);
     }
     return { recurringRows: recurring, oneOffRows: oneOff };
@@ -424,17 +442,22 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                             <p className="truncate text-sm font-medium">{row.source}</p>
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               {format(new Date(row.date), "MMM d, yyyy")} · {row.type}
+                              {" · "}
+                              {formatRecurrenceFrequency(row.recurrenceFrequency)}
                             </p>
                           </div>
                           <p className="shrink-0 text-sm font-semibold tabular-nums">
                             {formatMoney(row.amount, currency)}
                           </p>
                         </div>
-                        <div className="mt-2 flex justify-end gap-1">
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <IncomePaidCell row={row} />
                           {row.id.startsWith("optimistic-") ? (
                             <span className="text-xs text-muted-foreground">Saving…</span>
+                          ) : isRecurringRowId(row.id) ? (
+                            <span className="text-xs text-muted-foreground">Template</span>
                           ) : (
-                            <>
+                            <div className="flex gap-1">
                               <Button
                                 type="button"
                                 size="sm"
@@ -455,7 +478,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                                 <Trash2 className="size-4" />
                                 Delete
                               </Button>
-                            </>
+                            </div>
                           )}
                         </div>
                       </li>
@@ -485,6 +508,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                     {row.type}
                   </Badge>
                   <span>{formatPercent(row.sharePercent, 1)} of total</span>
+                  <IncomePaidCell row={row} />
                 </div>
                 {row.note ? (
                   <p className="mt-2 truncate text-xs text-muted-foreground">{row.note}</p>
@@ -678,7 +702,10 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                   ? recurringRows.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-border/60 bg-muted/20 dark:bg-zinc-900/40"
+                        className={cn(
+                          "border-b border-border/60 bg-muted/20 dark:bg-zinc-900/40",
+                          ledgerRowHover,
+                        )}
                       >
                         <td
                           className={cn(
@@ -701,13 +728,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                           <Badge variant={typeBadge(row.type)}>{row.type}</Badge>
                         </td>
                         <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Repeat
-                              className="size-3.5 shrink-0 text-teal-600 dark:text-teal-400"
-                              aria-hidden
-                            />
-                            {formatRecurrenceFrequency(row.recurrenceFrequency)}
-                          </span>
+                          <IncomeRecurrenceCell row={row} />
                         </td>
                         <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                           <IncomePaidCell row={row} />
@@ -717,9 +738,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                         </td>
                         <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                           {isRecurringRowId(row.id) ? (
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {formatRecurrenceFrequency(row.recurrenceFrequency)}
-                            </span>
+                            <span className="text-xs text-muted-foreground">Template</span>
                           ) : row.id.startsWith("optimistic-") ? (
                             <span className="text-xs text-muted-foreground">Saving…</span>
                           ) : (
@@ -753,7 +772,10 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                 {slice.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-border/60 last:border-0"
+                    className={cn(
+                      "border-b border-border/60 last:border-0",
+                      ledgerRowHover,
+                    )}
                   >
                     <td className={cn("py-2 pr-2 tabular-nums text-muted-foreground", ledgerColNowrap)}>
                       {format(new Date(row.date), "MMM d, yyyy")}
@@ -771,7 +793,7 @@ export function IncomeTable({ incomes, currency, onFocusAddForm }: IncomeTablePr
                       <Badge variant={typeBadge(row.type)}>{row.type}</Badge>
                     </td>
                     <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                      <span className="text-muted-foreground">—</span>
+                      <IncomeRecurrenceCell row={row} />
                     </td>
                     <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                       <IncomePaidCell row={row} />

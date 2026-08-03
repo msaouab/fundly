@@ -274,7 +274,9 @@ export function ExpenseForm({
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : "Pick a date"}
+                      <span suppressHydrationWarning>
+                        {field.value ? format(field.value, "PPP") : "Pick a date"}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">

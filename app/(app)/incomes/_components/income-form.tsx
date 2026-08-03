@@ -281,7 +281,9 @@ export function IncomeForm({
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : "Pick a date"}
+                      <span suppressHydrationWarning>
+                        {field.value ? format(field.value, "PPP") : "Pick a date"}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -347,7 +349,7 @@ export function IncomeForm({
           </div>
 
           <div className="col-span-full flex justify-end pt-1 sm:col-span-2 lg:col-span-4">
-            <Button type="submit" disabled={pending} className="min-w-[140px]">
+            <Button type="submit" disabled={pending} className="min-w-35">
               {pending ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

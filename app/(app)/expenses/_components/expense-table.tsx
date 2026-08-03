@@ -82,7 +82,7 @@ import { PayeeYesNo } from "@/components/payee-yes-no";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/empty-state";
 import { LedgerTableScroll } from "@/components/ledger-table-scroll";
-import { ledgerColNowrap, ledgerColPrimaryText } from "@/lib/ledger-table-columns";
+import { ledgerColNowrap, ledgerColPrimaryText, ledgerRowHover } from "@/lib/ledger-table-columns";
 import { EXPENSE_CATEGORY_ORDER, CATEGORY_CONFIG } from "@/lib/expense-categories";
 import { addMonths, formatMonthKey } from "@/lib/month";
 import { formatMoney, formatPercent } from "@/lib/money";
@@ -173,7 +173,7 @@ export function ExpenseTable({
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [bulkDupOpen, setBulkDupOpen] = useState(false);
   const [bulkTargetKey, setBulkTargetKey] = useState<string | null>(null);
-  const [fixedExpanded, setFixedExpanded] = useState(false);
+  const [fixedExpanded, setFixedExpanded] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const [vy, vm] = monthKey.split("-").map(Number);
@@ -261,7 +261,7 @@ export function ExpenseTable({
     const fixed: ExpenseWithMeta[] = [];
     const variable: ExpenseWithMeta[] = [];
     for (const row of filtered) {
-      if (row.kind === "FIXED") fixed.push(row);
+      if (row.kind === "FIXED" || isRecurringRowId(row.id)) fixed.push(row);
       else variable.push(row);
     }
     return { fixedRows: fixed, variableRows: variable };
@@ -1067,7 +1067,10 @@ export function ExpenseTable({
                       return (
                         <tr
                           key={row.id}
-                          className="border-b border-border/60 bg-muted/20 dark:border-zinc-800/60 dark:bg-zinc-900/40"
+                          className={cn(
+                            "border-b border-border/60 bg-muted/20 dark:border-zinc-800/60 dark:bg-zinc-900/40",
+                            ledgerRowHover,
+                          )}
                         >
                           <td className="py-2 pr-2 pl-4">
                             {row.id.startsWith("optimistic-") ? (
@@ -1135,9 +1138,7 @@ export function ExpenseTable({
                             {row.id.startsWith("optimistic-") ? (
                               <span className="text-xs text-muted-foreground">Saving…</span>
                             ) : isRecurringRowId(row.id) ? (
-                              <span className="text-xs font-medium text-muted-foreground">
-                                {formatRecurrenceFrequency(row.recurrenceFrequency)}
-                              </span>
+                              <span className="text-xs text-muted-foreground">Template</span>
                             ) : (
                               <div className="flex flex-nowrap gap-1">
                                 <Button
@@ -1180,7 +1181,10 @@ export function ExpenseTable({
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-border/60 last:border-0 dark:border-zinc-800/60"
+                      className={cn(
+                        "border-b border-border/60 last:border-0 dark:border-zinc-800/60",
+                        ledgerRowHover,
+                      )}
                     >
                       <td className="py-2 pr-2">
                         {row.id.startsWith("optimistic-") ? (

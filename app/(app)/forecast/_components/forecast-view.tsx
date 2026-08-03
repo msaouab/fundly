@@ -14,6 +14,7 @@ import { AppPage, AppPageHeader, AppPageOverview, AppPageSection } from "@/compo
 import { CATEGORY_CONFIG } from "@/lib/expense-categories";
 import type { ForecastBaseline, ForecastHorizon, ForecastMonth } from "@/lib/forecast/types";
 import { formatMoney, formatPercent } from "@/lib/money";
+import { ledgerRowHover } from "@/lib/ledger-table-columns";
 import { cn } from "@/lib/utils";
 
 const HORIZONS: { value: ForecastHorizon; label: string }[] = [
@@ -136,7 +137,7 @@ function MonthCard({
             </thead>
             <tbody>
               {incomeLines.map((line) => (
-                <tr key={line.id} className="border-b border-border/60">
+                <tr key={line.id} className={cn("border-b border-border/60", ledgerRowHover)}>
                   <td className="max-w-48 truncate py-2 pr-3 font-medium">{line.label}</td>
                   <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">Income</td>
                   <td className="py-2 text-right tabular-nums text-primary whitespace-nowrap">
@@ -147,7 +148,7 @@ function MonthCard({
               {expenseLines.map((line) => {
                 const cfg = line.category ? CATEGORY_CONFIG[line.category] : null;
                 return (
-                  <tr key={line.id} className="border-b border-border/60 last:border-0">
+                  <tr key={line.id} className={cn("border-b border-border/60 last:border-0", ledgerRowHover)}>
                     <td className="max-w-48 truncate py-2 pr-3 font-medium">
                       {cfg ? (
                         <span className="inline-flex items-center gap-1.5">
