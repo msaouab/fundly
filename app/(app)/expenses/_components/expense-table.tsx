@@ -19,6 +19,7 @@ import {
   Copy,
   Loader2,
   Pencil,
+  PiggyBank,
   Repeat,
   Trash2,
 } from "lucide-react";
@@ -137,12 +138,24 @@ function sortReducer(state: SortState, column: SortKey): SortState {
   };
 }
 
+const SAVINGS_CATEGORY: ExpenseCategory = "SAVINGS_CONTRIBUTION";
+
+function isSavingsTransfer(row: ExpenseWithMeta): boolean {
+  return row.category === SAVINGS_CATEGORY;
+}
+
 type ExpenseTableProps = {
   expenses: ExpenseWithMeta[];
   currency: string;
   totalIncome: number;
   monthKey: string;
   onFocusAddForm?: () => void;
+  /**
+   * When true (default), SAVINGS_CONTRIBUTION rows are pulled into a separate
+   * collapsible group so they stay visible but isolated from spend.
+   * Set false on the Savings page where the whole table is already transfers.
+   */
+  isolateSavings?: boolean;
 };
 
 export function ExpenseTable({
@@ -151,6 +164,7 @@ export function ExpenseTable({
   totalIncome,
   monthKey,
   onFocusAddForm,
+  isolateSavings = true,
 }: ExpenseTableProps) {
   const searchInputId = useId();
   const router = useRouter();
@@ -174,6 +188,7 @@ export function ExpenseTable({
   const [bulkDupOpen, setBulkDupOpen] = useState(false);
   const [bulkTargetKey, setBulkTargetKey] = useState<string | null>(null);
   const [fixedExpanded, setFixedExpanded] = useState(true);
+  const [savingsExpanded, setSavingsExpanded] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const [vy, vm] = monthKey.split("-").map(Number);
@@ -257,17 +272,32 @@ export function ExpenseTable({
     allKindsSelected,
   ]);
 
-  const { fixedRows, variableRows } = useMemo(() => {
+  const { savingsRows, fixedRows, variableRows } = useMemo(() => {
+    const savings: ExpenseWithMeta[] = [];
     const fixed: ExpenseWithMeta[] = [];
     const variable: ExpenseWithMeta[] = [];
     for (const row of filtered) {
+      if (isolateSavings && isSavingsTransfer(row)) {
+        savings.push(row);
+        continue;
+      }
       if (row.kind === "FIXED" || isRecurringRowId(row.id)) fixed.push(row);
       else variable.push(row);
     }
-    return { fixedRows: fixed, variableRows: variable };
-  }, [filtered]);
+    return { savingsRows: savings, fixedRows: fixed, variableRows: variable };
+  }, [filtered, isolateSavings]);
 
+  const showSavingsGroup = isolateSavings && savingsRows.length > 0;
   const showFixedGroup = fixedRows.length > 0;
+  const savingsTotal = useMemo(
+    () => savingsRows.reduce((sum, row) => sum + row.amount, 0),
+    [savingsRows],
+  );
+  const savingsPaidCount = useMemo(
+    () => savingsRows.reduce((count, row) => (row.payee ? count + 1 : count), 0),
+    [savingsRows],
+  );
+  const savingsShareOfIncome = totalIncome > 0 ? (savingsTotal / totalIncome) * 100 : 0;
   const fixedTotal = useMemo(
     () => fixedRows.reduce((sum, row) => sum + row.amount, 0),
     [fixedRows],
@@ -284,7 +314,8 @@ export function ExpenseTable({
   const { resetPage, setPage, setPageSize, sliceItems, ...paginationMeta } = pagination;
   const slice = sliceItems(variableRows);
   const variableSum = slice.reduce((s, r) => s + r.amount, 0);
-  const visibleSum = (showFixedGroup ? fixedTotal : 0) + variableSum;
+  const visibleSum =
+    (showSavingsGroup ? savingsTotal : 0) + (showFixedGroup ? fixedTotal : 0) + variableSum;
   const visibleShareOfIncome =
     totalIncome > 0 ? (visibleSum / totalIncome) * 100 : 0;
 
@@ -360,6 +391,16 @@ export function ExpenseTable({
     });
   }
 
+  function toggleSavingsGroup(checked: boolean) {
+    setRowSelection((s) => {
+      const next = { ...s };
+      for (const r of savingsRows) {
+        if (!r.id.startsWith("optimistic-")) next[r.id] = checked;
+      }
+      return next;
+    });
+  }
+
   const pageSelectableIds = slice.filter((r) => !r.id.startsWith("optimistic-")).map((r) => r.id);
   const allPageSelected =
     pageSelectableIds.length > 0 && pageSelectableIds.every((id) => rowSelection[id]);
@@ -371,6 +412,14 @@ export function ExpenseTable({
     fixedSelectableIds.length > 0 && fixedSelectableIds.every((id) => rowSelection[id]);
   const someFixedSelected =
     fixedSelectableIds.some((id) => rowSelection[id]) && !allFixedSelected;
+
+  const savingsSelectableIds = savingsRows
+    .filter((r) => !r.id.startsWith("optimistic-"))
+    .map((r) => r.id);
+  const allSavingsSelected =
+    savingsSelectableIds.length > 0 && savingsSelectableIds.every((id) => rowSelection[id]);
+  const someSavingsSelected =
+    savingsSelectableIds.some((id) => rowSelection[id]) && !allSavingsSelected;
 
   function onDeleteConfirmed() {
     if (!deleteRow) return;
@@ -642,6 +691,136 @@ export function ExpenseTable({
       ) : (
         <>
           <ul className="space-y-3 md:hidden" aria-label="Expense entries">
+            {showSavingsGroup ? (
+              <li className="rounded-lg border border-emerald-500/35 bg-emerald-500/5 p-3 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={
+                      allSavingsSelected ? true : someSavingsSelected ? "indeterminate" : false
+                    }
+                    onCheckedChange={(c) => toggleSavingsGroup(c === true)}
+                    aria-label="Select all savings transfers"
+                    className="mt-0.5"
+                  />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => setSavingsExpanded((v) => !v)}
+                    aria-expanded={savingsExpanded}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 transition-transform",
+                            !savingsExpanded && "-rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                        <PiggyBank className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                        Savings transfers
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({savingsRows.length})
+                        </span>
+                      </p>
+                      <p className="shrink-0 text-base font-semibold tabular-nums">
+                        {formatMoney(savingsTotal, currency)}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatPercent(savingsShareOfIncome, 1)} of income
+                      {" · "}
+                      <span
+                        className={
+                          savingsPaidCount > 0
+                            ? "text-emerald-700 dark:text-emerald-300"
+                            : undefined
+                        }
+                      >
+                        {savingsPaidCount}/{savingsRows.length} paid
+                      </span>
+                      {savingsExpanded ? " · tap to collapse" : " · tap to expand"}
+                    </p>
+                  </button>
+                </div>
+                {savingsExpanded ? (
+                  <ul className="mt-3 space-y-2 border-t border-emerald-500/25 pt-3 dark:border-emerald-500/30">
+                    {savingsRows.map((row) => {
+                      const cfg = CATEGORY_CONFIG[row.category];
+                      return (
+                        <li
+                          key={row.id}
+                          className="rounded-md border border-emerald-500/20 bg-background/80 p-2.5 dark:border-emerald-500/25 dark:bg-zinc-950/40"
+                        >
+                          <div className="flex items-start gap-2">
+                            {!row.id.startsWith("optimistic-") ? (
+                              <Checkbox
+                                checked={!!rowSelection[row.id]}
+                                onCheckedChange={(c) => toggleRow(row.id, c === true)}
+                                aria-label={`Select ${row.description?.trim() || "saving"}`}
+                                className="mt-0.5"
+                              />
+                            ) : (
+                              <span className="inline-block w-4 shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                                  {row.description?.trim() || "—"}
+                                </p>
+                                <p className="shrink-0 text-sm font-semibold tabular-nums">
+                                  {formatMoney(row.amount, currency)}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {format(new Date(row.date), "MMM d, yyyy")} · {cfg.icon}{" "}
+                                {cfg.label}
+                              </p>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                                >
+                                  Savings
+                                </Badge>
+                                {row.id.startsWith("optimistic-") ? (
+                                  <span className="text-xs text-muted-foreground">Saving…</span>
+                                ) : isRecurringRowId(row.id) ? (
+                                  <ExpensePaidCell row={row} />
+                                ) : (
+                                  <div className="flex gap-1">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8"
+                                      onClick={() => setEditRow(row)}
+                                    >
+                                      <Pencil className="size-4" />
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-destructive"
+                                      onClick={() => setDeleteRow(row)}
+                                    >
+                                      <Trash2 className="size-4" />
+                                      Delete
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </li>
+            ) : null}
             {showFixedGroup ? (
               <li className="rounded-lg border border-primary/30 bg-primary/5 p-3 dark:border-primary/35 dark:bg-primary/10">
                 <div className="flex items-start gap-3">
@@ -726,35 +905,47 @@ export function ExpenseTable({
                                 {format(new Date(row.date), "MMM d, yyyy")} · {cfg.icon}{" "}
                                 {cfg.label}
                               </p>
-                              <div className="mt-2 flex justify-end gap-1">
-                                {row.id.startsWith("optimistic-") ? (
-                                  <span className="text-xs text-muted-foreground">Saving…</span>
-                                ) : isRecurringRowId(row.id) ? (
-                                  <ExpensePaidCell row={row} />
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                {isSavingsTransfer(row) ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                                  >
+                                    Savings
+                                  </Badge>
                                 ) : (
-                                  <>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-8"
-                                      onClick={() => setEditRow(row)}
-                                    >
-                                      <Pencil className="size-4" />
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-8 text-destructive"
-                                      onClick={() => setDeleteRow(row)}
-                                    >
-                                      <Trash2 className="size-4" />
-                                      Delete
-                                    </Button>
-                                  </>
+                                  <span />
                                 )}
+                                <div className="flex justify-end gap-1">
+                                  {row.id.startsWith("optimistic-") ? (
+                                    <span className="text-xs text-muted-foreground">Saving…</span>
+                                  ) : isRecurringRowId(row.id) ? (
+                                    <ExpensePaidCell row={row} />
+                                  ) : (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8"
+                                        onClick={() => setEditRow(row)}
+                                      >
+                                        <Pencil className="size-4" />
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 text-destructive"
+                                        onClick={() => setDeleteRow(row)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                        Delete
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -800,12 +991,21 @@ export function ExpenseTable({
                           <span aria-hidden>{cfg.icon}</span>
                           {cfg.label}
                         </span>
-                        <Badge
-                          variant="outline"
-                          className="border-border font-normal text-muted-foreground"
-                        >
-                          Variable
-                        </Badge>
+                        {isSavingsTransfer(row) ? (
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-500/45 font-normal text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                          >
+                            Savings
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-border font-normal text-muted-foreground"
+                          >
+                            Variable
+                          </Badge>
+                        )}
                         <span className="text-muted-foreground">
                           {formatPercent(row.sharePercent, 1)} of income
                         </span>
@@ -981,6 +1181,213 @@ export function ExpenseTable({
                 </tr>
               </thead>
               <tbody>
+                {showSavingsGroup ? (
+                  <tr className="border-b border-emerald-500/30 bg-emerald-500/5 dark:border-emerald-500/35 dark:bg-emerald-500/10">
+                    <td className="py-2 pr-2">
+                      <Checkbox
+                        checked={
+                          allSavingsSelected ? true : someSavingsSelected ? "indeterminate" : false
+                        }
+                        onCheckedChange={(c) => toggleSavingsGroup(c === true)}
+                        aria-label="Select all savings transfers"
+                      />
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-muted-foreground"
+                        onClick={() => setSavingsExpanded((v) => !v)}
+                        aria-expanded={savingsExpanded}
+                        aria-label={
+                          savingsExpanded ? "Collapse savings transfers" : "Expand savings transfers"
+                        }
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 transition-transform",
+                            !savingsExpanded && "-rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 font-semibold tabular-nums", ledgerColNowrap)}>
+                      {formatMoney(savingsTotal, currency)}
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                      {formatPercent(savingsShareOfIncome, 1)}
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColPrimaryText)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 font-medium text-foreground"
+                        onClick={() => setSavingsExpanded((v) => !v)}
+                        aria-expanded={savingsExpanded}
+                      >
+                        <PiggyBank
+                          className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                          aria-hidden
+                        />
+                        Savings transfers
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({savingsRows.length})
+                        </span>
+                      </button>
+                    </td>
+                    <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>—</td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                      >
+                        Savings
+                      </Badge>
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <PiggyBank
+                        className="size-4 text-emerald-600 dark:text-emerald-400"
+                        aria-label="Savings group"
+                      />
+                    </td>
+                    <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                      <span
+                        className={cn(
+                          "inline-flex flex-col gap-0.5 tabular-nums",
+                          savingsPaidCount > 0
+                            ? "font-medium text-emerald-700 dark:text-emerald-300"
+                            : "text-muted-foreground",
+                        )}
+                        title={`${savingsPaidCount} of ${savingsRows.length} marked paid`}
+                      >
+                        <span>
+                          {savingsPaidCount}/{savingsRows.length}
+                        </span>
+                        <span className="text-[10px] font-normal leading-none text-muted-foreground">
+                          paid
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-2" />
+                  </tr>
+                ) : null}
+                {showSavingsGroup && savingsExpanded
+                  ? savingsRows.map((row) => {
+                      const cfg = CATEGORY_CONFIG[row.category];
+                      return (
+                        <tr
+                          key={row.id}
+                          className={cn(
+                            "border-b border-emerald-500/15 bg-emerald-500/[0.03] dark:border-emerald-500/20 dark:bg-emerald-500/[0.06]",
+                            ledgerRowHover,
+                          )}
+                        >
+                          <td className="py-2 pr-2 pl-4">
+                            {row.id.startsWith("optimistic-") ? (
+                              <span className="inline-block w-4" />
+                            ) : (
+                              <Checkbox
+                                checked={!!rowSelection[row.id]}
+                                onCheckedChange={(c) => toggleRow(row.id, c === true)}
+                                aria-label={`Select ${row.description?.trim() || "saving"}`}
+                              />
+                            )}
+                          </td>
+                          <td
+                            className={cn(
+                              "py-2 pr-2 tabular-nums text-muted-foreground",
+                              ledgerColNowrap,
+                            )}
+                          >
+                            {format(new Date(row.date), "MMM d, yyyy")}
+                          </td>
+                          <td className={cn("py-2 pr-2 font-medium tabular-nums", ledgerColNowrap)}>
+                            {formatMoney(row.amount, currency)}
+                          </td>
+                          <td className={cn("py-2 pr-2 text-muted-foreground", ledgerColNowrap)}>
+                            {formatPercent(row.sharePercent, 1)}
+                          </td>
+                          <td
+                            className={cn("py-2 pr-2", ledgerColPrimaryText)}
+                            title={row.description?.trim() || undefined}
+                          >
+                            {row.description?.trim() ? (
+                              row.description
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className={cn("relative z-10 py-2 pr-2", ledgerColNowrap)}>
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                              <span aria-hidden>{cfg.icon}</span>
+                              <span className="text-muted-foreground">{cfg.label}</span>
+                            </span>
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                            >
+                              Savings
+                            </Badge>
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            {row.isRecurring || row.recurrenceFrequency || isRecurringRowId(row.id) ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Repeat
+                                  className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                                  aria-hidden
+                                />
+                                {formatRecurrenceFrequency(row.recurrenceFrequency)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            <ExpensePaidCell row={row} />
+                          </td>
+                          <td className={cn("py-2 pr-2", ledgerColNowrap)}>
+                            {row.id.startsWith("optimistic-") ? (
+                              <span className="text-xs text-muted-foreground">Saving…</span>
+                            ) : isRecurringRowId(row.id) ? (
+                              <span className="text-xs text-muted-foreground">Template</span>
+                            ) : (
+                              <div className="flex flex-nowrap gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Edit saving"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setEditRow(row);
+                                  }}
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0 text-destructive"
+                                  aria-label="Delete saving"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDeleteRow(row);
+                                  }}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  : null}
                 {showFixedGroup ? (
                   <tr className="border-b border-primary/25 bg-primary/5 dark:border-primary/30 dark:bg-primary/10">
                     <td className="py-2 pr-2">
@@ -1114,17 +1521,34 @@ export function ExpenseTable({
                             </span>
                           </td>
                           <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                            <Badge
-                              variant="outline"
-                              className="border-primary/45 text-primary dark:border-primary/50"
-                            >
-                              Fixed
-                            </Badge>
+                            {isSavingsTransfer(row) ? (
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                              >
+                                Savings
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="border-primary/45 text-primary dark:border-primary/50"
+                              >
+                                Fixed
+                              </Badge>
+                            )}
                           </td>
                           <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                             {row.isRecurring || row.recurrenceFrequency ? (
                               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Repeat className="size-3.5 shrink-0 text-primary" aria-hidden />
+                                <Repeat
+                                  className={cn(
+                                    "size-3.5 shrink-0",
+                                    isSavingsTransfer(row)
+                                      ? "text-emerald-600 dark:text-emerald-400"
+                                      : "text-primary",
+                                  )}
+                                  aria-hidden
+                                />
                                 {formatRecurrenceFrequency(row.recurrenceFrequency)}
                               </span>
                             ) : (
@@ -1223,12 +1647,21 @@ export function ExpenseTable({
                         </span>
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
-                        <Badge
-                          variant="outline"
-                          className="border-border text-muted-foreground dark:border-zinc-600"
-                        >
-                          Variable
-                        </Badge>
+                        {isSavingsTransfer(row) ? (
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-500/45 text-emerald-700 dark:border-emerald-500/50 dark:text-emerald-300"
+                          >
+                            Savings
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-border text-muted-foreground dark:border-zinc-600"
+                          >
+                            Variable
+                          </Badge>
+                        )}
                       </td>
                       <td className={cn("py-2 pr-2", ledgerColNowrap)}>
                         <span className="text-muted-foreground">—</span>

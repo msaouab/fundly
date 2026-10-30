@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addExpense } from "../actions";
 import { expenseAddFormSchema, type ExpenseAddFormValues } from "../schema";
+import type { ExpenseCategory } from "@/generated/prisma/enums";
 import type { ExpenseWithMeta } from "../types";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -43,17 +44,19 @@ import {
   useAddFormAccordion,
 } from "@/lib/use-add-form-accordion";
 
-const defaultValues: ExpenseAddFormValues = {
-  amount: 0,
-  date: normalizeDateToLocalNoon(new Date()),
-  description: "",
-  kind: "VARIABLE",
-  category: "FOOD_GROCERIES",
-  currency: "MAD",
-  isRecurring: false,
-  recurrenceFrequency: null,
-  payee: false,
-};
+function createDefaultValues(category: ExpenseCategory = "FOOD_GROCERIES"): ExpenseAddFormValues {
+  return {
+    amount: 0,
+    date: normalizeDateToLocalNoon(new Date()),
+    description: "",
+    kind: "VARIABLE",
+    category,
+    currency: "MAD",
+    isRecurring: false,
+    recurrenceFrequency: null,
+    payee: false,
+  };
+}
 
 function buildOptimisticExpense(
   userId: string,
@@ -111,6 +114,12 @@ type ExpenseFormProps = {
   monthExpenseTotal?: number;
   /** Monthly income for the viewed month (share % = amount / income). */
   monthTotalIncome?: number;
+  /** When set, category is fixed and the category picker is hidden. */
+  lockedCategory?: ExpenseCategory;
+  accordionTitle?: string;
+  submitLabel?: string;
+  successMessage?: string;
+  shortcutKey?: string;
   amountFocusRef?: RefObject<HTMLInputElement | null>;
   addFormControlsRef?: RefObject<AddFormControls | null>;
   onOptimisticAdd?: (row: ExpenseWithMeta) => void;
@@ -122,6 +131,11 @@ export function ExpenseForm({
   currency = "MAD",
   userId,
   monthTotalIncome = 0,
+  lockedCategory,
+  accordionTitle = "Add expense",
+  submitLabel = "Save expense",
+  successMessage = "Expense added",
+  shortcutKey = "e",
   amountFocusRef,
   addFormControlsRef,
   onOptimisticAdd,
@@ -135,10 +149,11 @@ export function ExpenseForm({
     internalAmountRef,
     addFormControlsRef,
   );
+  const defaults = createDefaultValues(lockedCategory ?? "FOOD_GROCERIES");
 
   const form = useForm<ExpenseAddFormValues>({
     resolver: zodResolver(expenseAddFormSchema) as Resolver<ExpenseAddFormValues>,
-    defaultValues: { ...defaultValues, currency },
+    defaultValues: { ...defaults, currency },
   });
 
   const {
@@ -154,20 +169,21 @@ export function ExpenseForm({
       ) {
         return;
       }
-      if (e.key === "e" || e.key === "E") {
+      if (e.key.toLowerCase() === shortcutKey.toLowerCase()) {
         e.preventDefault();
         openAndFocusAmount();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openAndFocusAmount]);
+  }, [openAndFocusAmount, shortcutKey]);
 
   function onSubmit(values: ExpenseAddFormValues) {
     startTransition(async () => {
       const payload: ExpenseAddFormValues = {
         ...values,
         kind: "VARIABLE",
+        category: lockedCategory ?? values.category,
         isRecurring: false,
         recurrenceFrequency: null,
       };
@@ -188,9 +204,9 @@ export function ExpenseForm({
         onOptimisticEnd(optimisticRow.id);
       }
       if (res.ok) {
-        toast.success("Expense added");
+        toast.success(successMessage);
         form.reset({
-          ...defaultValues,
+          ...defaults,
           currency,
           date: normalizeDateToLocalNoon(new Date()),
         });
@@ -210,6 +226,8 @@ export function ExpenseForm({
     <Card
       className={cn(
         "border-border bg-background ring-1 ring-ring/15 transition-colors dark:border-zinc-700 dark:bg-zinc-900 dark:ring-ring/20",
+        lockedCategory === "SAVINGS_CONTRIBUTION" &&
+          "border-primary/35 ring-primary/20 dark:border-primary/40 dark:ring-primary/25",
         className,
       )}
     >
@@ -221,7 +239,7 @@ export function ExpenseForm({
       >
         <AccordionItem value={ADD_FORM_ACCORDION_VALUE} className="border-0">
           <AccordionTrigger className="px-6 text-lg hover:no-underline">
-            Add expense
+            {accordionTitle}
           </AccordionTrigger>
           <AccordionContent className="px-6">
         <form
@@ -303,36 +321,45 @@ export function ExpenseForm({
           </div>
 
           <div className="col-span-full grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <FormField label="Category" htmlFor="expense-category-trigger">
-              <Controller
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <Select
-                    name="expenseCategory"
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger id="expense-category-trigger" className="h-10 dark:border-zinc-700">
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                  <SelectContent>
-                    {EXPENSE_CATEGORY_ORDER.map((cat) => {
-                      const cfg = CATEGORY_CONFIG[cat];
-                      return (
-                        <SelectItem key={cat} value={cat}>
-                          <span className="flex items-center gap-2">
-                            <span aria-hidden>{cfg.icon}</span>
-                            <span>{cfg.label}</span>
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            </FormField>
+            {lockedCategory ? (
+              <FormField label="Category">
+                <p className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm dark:border-zinc-700">
+                  <span aria-hidden>{CATEGORY_CONFIG[lockedCategory].icon}</span>
+                  <span>{CATEGORY_CONFIG[lockedCategory].label}</span>
+                </p>
+              </FormField>
+            ) : (
+              <FormField label="Category" htmlFor="expense-category-trigger">
+                <Controller
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <Select
+                      name="expenseCategory"
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger id="expense-category-trigger" className="h-10 dark:border-zinc-700">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EXPENSE_CATEGORY_ORDER.map((cat) => {
+                          const cfg = CATEGORY_CONFIG[cat];
+                          return (
+                            <SelectItem key={cat} value={cat}>
+                              <span className="flex items-center gap-2">
+                                <span aria-hidden>{cfg.icon}</span>
+                                <span>{cfg.label}</span>
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FormField>
+            )}
 
             <Controller
               control={form.control}
@@ -356,7 +383,7 @@ export function ExpenseForm({
                   Saving…
                 </>
               ) : (
-                "Save expense"
+                submitLabel
               )}
             </Button>
           </div>

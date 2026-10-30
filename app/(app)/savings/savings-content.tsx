@@ -13,12 +13,17 @@ export async function SavingsPageContent({ period: serialized }: { period: Seria
 
   return (
     <SavingsView
+      userId={data.userId}
       currency={data.currency}
       periodLabel={data.periodLabel}
       periodTotals={data.period}
       previousPeriodSavings={data.previousPeriodSavings}
+      previousPeriodTransfers={data.previousPeriodTransfers}
       global={data.global}
       trend={data.trend}
+      transfers={data.transfers}
+      totalIncome={data.totalIncome}
+      monthKey={serialized.to.slice(0, 7)}
     />
   );
 }

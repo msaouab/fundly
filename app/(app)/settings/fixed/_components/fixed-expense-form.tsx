@@ -67,13 +67,20 @@ export type RecurringExpenseRow = {
 
 type FixedExpenseFormProps = {
   currency?: string;
+  /** When set, category is fixed and the category picker is hidden. */
+  lockedCategory?: ExpenseCategory;
+  submitLabel?: string;
+  successMessage?: string;
 };
 
-function createExpenseDefaults(currency: string): RecurringExpenseFormValues {
+function createExpenseDefaults(
+  currency: string,
+  category: ExpenseCategory = "HOUSING",
+): RecurringExpenseFormValues {
   return {
     amount: 0,
     description: "",
-    category: "HOUSING",
+    category,
     currency,
     recurrenceFrequency: "MONTHLY",
     endsMode: "indefinite",
@@ -82,12 +89,18 @@ function createExpenseDefaults(currency: string): RecurringExpenseFormValues {
   };
 }
 
-export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
+export function FixedExpenseForm({
+  currency = "MAD",
+  lockedCategory,
+  submitLabel = "Save recurring expense",
+  successMessage = "Recurring expense added",
+}: FixedExpenseFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const defaults = createExpenseDefaults(currency, lockedCategory ?? "HOUSING");
   const form = useForm<RecurringExpenseFormValues>({
     resolver: zodResolver(recurringExpenseFormSchema) as Resolver<RecurringExpenseFormValues>,
-    defaultValues: createExpenseDefaults(currency),
+    defaultValues: defaults,
   });
   const endsMode = useWatch({ control: form.control, name: "endsMode" }) ?? "indefinite";
   const recurrenceFrequency =
@@ -102,10 +115,14 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
 
   function onSubmit(values: RecurringExpenseFormValues) {
     startTransition(async () => {
-      const res = await createRecurringExpense({ ...values, currency });
+      const res = await createRecurringExpense({
+        ...values,
+        category: lockedCategory ?? values.category,
+        currency,
+      });
       if (res.ok) {
-        toast.success("Recurring expense added");
-        form.reset(createExpenseDefaults(currency));
+        toast.success(successMessage);
+        form.reset(createExpenseDefaults(currency, lockedCategory ?? "HOUSING"));
         router.refresh();
       } else {
         toast.error(res.error);
@@ -182,6 +199,12 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
 
       <div className="space-y-2 sm:col-span-2">
         <Label htmlFor="re-exp-cat">Category</Label>
+        {lockedCategory ? (
+          <p className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm dark:border-zinc-700">
+            <span aria-hidden>{CATEGORY_CONFIG[lockedCategory].icon}</span>
+            <span>{CATEGORY_CONFIG[lockedCategory].label}</span>
+          </p>
+        ) : (
         <Controller
           control={form.control}
           name="category"
@@ -206,6 +229,7 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
             </Select>
           )}
         />
+        )}
       </div>
 
       <div className="flex justify-end sm:col-span-2">
@@ -216,7 +240,7 @@ export function FixedExpenseForm({ currency = "MAD" }: FixedExpenseFormProps) {
               Saving…
             </>
           ) : (
-            "Save recurring expense"
+            submitLabel
           )}
         </Button>
       </div>

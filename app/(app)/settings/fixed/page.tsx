@@ -72,8 +72,12 @@ export default async function FixedSettingsPage() {
     startsAt: row.startsAt.toISOString(),
   }));
 
+  const savingRows = expenseRows.filter((r) => r.category === "SAVINGS_CONTRIBUTION");
+  const nonSavingExpenseRows = expenseRows.filter((r) => r.category !== "SAVINGS_CONTRIBUTION");
+
   const incomeTotal = incomeRows.reduce((s, r) => s + r.amount, 0);
-  const expenseTotal = expenseRows.reduce((s, r) => s + r.amount, 0);
+  const expenseTotal = nonSavingExpenseRows.reduce((s, r) => s + r.amount, 0);
+  const savingTotal = savingRows.reduce((s, r) => s + r.amount, 0);
 
   const incomesPanel = (
     <div className="flex flex-col gap-6">
@@ -125,7 +129,7 @@ export default async function FixedSettingsPage() {
             Total recurring expenses
           </CardTitle>
           <CardDescription className="text-xs">
-            {expenseRows.length} template{expenseRows.length === 1 ? "" : "s"} · shown every month
+            {nonSavingExpenseRows.length} template{nonSavingExpenseRows.length === 1 ? "" : "s"} · shown every month
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,7 +157,54 @@ export default async function FixedSettingsPage() {
           <CardDescription>Edit or delete templates anytime.</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <FixedExpenseTable rows={expenseRows} currency={currency} />
+          <FixedExpenseTable rows={nonSavingExpenseRows} currency={currency} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const savingsPanel = (
+    <div className="flex flex-col gap-6">
+      <Card className="border-emerald-500/35 bg-emerald-500/5 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Total recurring savings
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {savingRows.length} template{savingRows.length === 1 ? "" : "s"} · Savings transfer category
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">
+            {formatMoney(savingTotal, currency)}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-base">Add recurring saving</CardTitle>
+          <CardDescription>
+            Planned monthly set-asides — stored as recurring expenses with the Savings transfer category.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FixedExpenseForm
+            currency={currency}
+            lockedCategory="SAVINGS_CONTRIBUTION"
+            submitLabel="Save recurring saving"
+            successMessage="Recurring saving added"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-base">Recurring savings</CardTitle>
+          <CardDescription>Edit or delete templates anytime.</CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <FixedExpenseTable rows={savingRows} currency={currency} />
         </CardContent>
       </Card>
     </div>
@@ -163,9 +214,13 @@ export default async function FixedSettingsPage() {
     <AppPage size="6xl">
       <AppPageHeader
         title="Recurring"
-        description="Define fixed incomes and expenses once. They always appear in your monthly tables; mark Paid separately each month."
+        description="Define fixed incomes, expenses, and savings transfers once. They always appear in your monthly tables; mark Paid separately each month."
       />
-      <FixedSettingsPanels incomes={incomesPanel} expenses={expensesPanel} />
+      <FixedSettingsPanels
+        incomes={incomesPanel}
+        expenses={expensesPanel}
+        savings={savingsPanel}
+      />
     </AppPage>
   );
 }
